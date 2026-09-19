@@ -22,6 +22,11 @@ problem, size, and algorithm as training. The CLI checkpoints contain model
 weights and architecture metadata; they do not contain an optimizer state for
 resuming training.
 
+`scripts/run_all.sh` reports stage and problem completion, percentages, and
+elapsed time. Training reports epoch and step progress with an estimated remaining
+time, including a message before validation. Progress goes to stderr, while
+evaluation metrics remain on stdout.
+
 ## Mamba
 
 Install the core `mamba` extra, then select the backbone:

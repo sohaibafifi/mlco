@@ -7,6 +7,8 @@ Training saves checkpoints and metrics in the selected output directory.
 from __future__ import annotations
 
 import json
+import sys
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -36,6 +38,12 @@ def _env_kwargs(problem: str) -> dict[str, Any]:
         "fjsp": {"ops_per_job": 3, "num_machines": 5},
     }
     return extra.get(problem.lower(), {})
+
+
+def _duration(seconds: float) -> str:
+    minutes, seconds = divmod(max(0, int(seconds)), 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours:d}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes:02d}:{seconds:02d}"
 
 
 @dataclass
@@ -84,9 +92,39 @@ def train_run(args: TrainArgs) -> dict[str, Any]:
     rng = torch.Generator(device=device).manual_seed(args.seed)
     best_reward = -float("inf")
     history: list[dict[str, float]] = []
+    total_steps = args.epochs * args.steps_per_epoch
+    completed_steps = 0
+    training_seconds = 0.0
+    started = last_update = time.monotonic()
+
+    def report(epoch: int, phase: str) -> None:
+        nonlocal last_update
+        last_update = time.monotonic()
+        percent = 100.0 * completed_steps / total_steps if total_steps else 0.0
+        remaining = (
+            _duration(training_seconds / completed_steps * (total_steps - completed_steps))
+            if completed_steps
+            else "--:--"
+        )
+        print(
+            f"[{args.problem}/{args.algo}] epoch {epoch + 1}/{args.epochs} | "
+            f"steps {completed_steps}/{total_steps} ({percent:.1f}%) | "
+            f"elapsed {_duration(last_update - started)} | training ETA {remaining} | {phase}",
+            file=sys.stderr,
+            flush=True,
+        )
+
     for epoch in range(args.epochs):
+        report(epoch, "training")
         for _ in range(args.steps_per_epoch):
+            step_started = time.monotonic()
             algo.train_step(rng)
+            now = time.monotonic()
+            training_seconds += now - step_started
+            completed_steps += 1
+            if completed_steps in (1, total_steps) or now - last_update >= 5.0:
+                report(epoch, "training")
+        report(epoch, f"validating {args.eval_batch_size} instances")
         ev = algo.eval_step(rng)
         reward = float(ev.get("eval_reward", float("nan")))
         history.append({"epoch": epoch, **{k: float(v) for k, v in ev.items()}})
@@ -100,7 +138,7 @@ def train_run(args: TrainArgs) -> dict[str, Any]:
         if reward > best_reward:
             best_reward = reward
             torch.save({"model": model.state_dict(), "arch": arch, "epoch": epoch}, out / "best.pt")
-        print(f"[{args.problem}/{args.algo}] epoch {epoch}: reward={reward:.4f}")
+        report(epoch, f"validation complete, reward={reward:.4f}")
 
     payload = {
         "args": asdict(args),
@@ -131,6 +169,11 @@ def eval_run(args: EvalArgs) -> dict[str, float]:
     model = make_model(env, **state.get("arch", {}))
     model.load_state_dict(state.get("model", state), strict=False)
     algo = make_algo(args.algo, model, env, device=device, eval_batch_size=args.eval_batch_size)
+    print(
+        f"[{args.problem}/{args.algo}] evaluating {args.eval_batch_size} instances on {device}",
+        file=sys.stderr,
+        flush=True,
+    )
     ev = algo.eval_step(torch.Generator(device=device).manual_seed(args.seed))
     metrics = {k: float(v) for k, v in ev.items()}
     print(json.dumps(metrics, indent=2))
