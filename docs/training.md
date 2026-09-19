@@ -2,8 +2,9 @@
 
 ## PyTorch
 
-`neuroco train` builds a policy through `neuro_co.core.factory`. Available
-problems are `tsp`, `atsp`, `cvrp`, `cvrptw`, `op`, `pdp`, `mtsp`, and `fjsp`.
+`neuroco train` uses models and algorithms from `neuro-co-core` and concrete
+environments from `neuro-co-problems`. Install both packages. The registered
+Torch problems are `tsp`, `atsp`, `cvrp`, `cvrptw`, `op`, `pdp`, `mtsp`, and `fjsp`.
 Algorithms are `reinforce`, `pomo`, and `ppo`; backbones are `am`, `gnn`, `matnet`,
 and `mamba`. The `gnn` backbone requires the core `gnn` extra. Backbone
 compatibility depends on the problem representation.
@@ -38,8 +39,9 @@ Automatic selection depends on the available device and installed backend.
 
 ## JAX
 
-The JAX runner trains an attention model with POMO on CVRP or TSP. Install the
-core `jax` extra, then run a small CPU-compatible configuration:
+The JAX runner trains an attention model with POMO on CVRP or TSP. Install
+`neuro-co-core` and `neuro-co-problems[jax]`, then run a small CPU-compatible
+configuration:
 
 ```bash
 uv sync --all-packages --extra jax
@@ -48,6 +50,11 @@ uv run --no-sync python scripts/train_jax.py --problem cvrp \
   --hidden-dim 16 --num-layers 1 --num-heads 2 --precision fp32 \
   --output outputs/jax-cvrp
 ```
+
+JAX environments live in `neuro_co.problems.tsp.jax_env` and
+`neuro_co.problems.cvrp.jax_env`. The shared registry selects them with
+`make_env("cvrp", backend="jax", size=20)`. JAX models, POMO, and training remain
+in `neuro_co.core.jax_backend`.
 
 The module entry point accepts the same arguments:
 `python -m neuro_co.core.jax_backend.train`.

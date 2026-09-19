@@ -4,11 +4,11 @@ import pytest
 import torch
 
 from neuro_co.core.algos.pomo import _greedy_rollout
-from neuro_co.core.envs.cvrp import CVRPEnv
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.inference import greedy_rollout_actions
 from neuro_co.core.models import AttentionModel
 from neuro_co.core.models.decoders.pointer import PointerDecoder
+from neuro_co.problems.cvrp.env import CVRPEnv
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 def _model(env):

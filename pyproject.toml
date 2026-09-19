@@ -71,6 +71,7 @@ ignore = ["E501", "B008", "N806", "N812", "N803"]
 # jaxtyping shape strings (e.g. `Float[Tensor, "b a"]`) trigger F722/F821
 # because ruff parses them as PEP 484 forward references.
 "packages/neuro-co-core/**" = ["F722", "F821"]
+"packages/neuro-co-problems/src/**/env.py" = ["F722", "F821"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["neuro_co"]

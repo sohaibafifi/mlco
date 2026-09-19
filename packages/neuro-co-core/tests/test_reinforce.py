@@ -3,8 +3,8 @@
 import torch
 
 from neuro_co.core.algos.reinforce import REINFORCE, REINFORCEConfig
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 def _build(size: int = 5, batch: int = 8):

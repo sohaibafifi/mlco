@@ -2,7 +2,7 @@
 #
 # train.oar: OAR array job: train one (problem, seed) policy per task.
 #
-# 12 tasks = 4 core problems x 3 seeds (cvrptw, op, pdp, fjsp).
+# 12 tasks = 4 registered problems x 3 seeds (cvrptw, op, pdp, fjsp).
 # Each task requests 1 GPU + 48-hour walltime; `besteffort` + `idempotent`
 # survive preemption. Output ckpts land in
 # `outputs/<problem>/train_seed<S>/best.pt` (+ latest.pt + metrics.json),
@@ -69,5 +69,5 @@ case $P in
 esac
 
 echo "[OAR $OAR_JOB_ID idx=$IDX] $P seed=$S"
-"${UV_BIN:-uv}" run --frozen neuroco train --problem "$P" --seed "$S" $OV \
+"${UV_BIN:-uv}" run --no-sync neuroco train --problem "$P" --seed "$S" $OV \
     --device cuda --out-dir "outputs/$P/train_seed$S"

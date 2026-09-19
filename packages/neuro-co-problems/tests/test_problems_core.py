@@ -1,19 +1,61 @@
 """problems concept banks on neuro-co-core: registration + State labels."""
 
+import subprocess
+import sys
+
 import torch
 
 from neuro_co.core.concepts import concept_registry
-from neuro_co.core.envs.cvrptw import CVRPTWEnv
-from neuro_co.core.envs.fjsp import FJSPEnv
-from neuro_co.core.envs.op import OPEnv
-from neuro_co.core.envs.pdp import PDPEnv
-from neuro_co.problems import load_plugins
+from neuro_co.problems import get_bank, load_plugins
+from neuro_co.problems.fjsp.env import FJSPEnv
+from neuro_co.problems.op.env import OPEnv
+from neuro_co.problems.pdp.env import PDPEnv
+from neuro_co.problems.vrptw.env import CVRPTWEnv
+
+
+def test_environment_construction_and_solver_lookup_leave_backends_unloaded() -> None:
+    script = """
+import pickle
+import sys
+from importlib.util import find_spec
+from neuro_co.core.env_registry import make_env
+from neuro_co.problems import get_solver, load_plugins
+
+for problem in ("cvrptw", "op", "pdp", "fjsp"):
+    make_env(problem, size=3)
+load_plugins()
+for problem, engine, dependency in (
+    ("cvrptw", "pyvrp", "pyvrp"),
+    ("cvrptw", "cpsat", "ortools"),
+    ("op", "cpsat", "ortools"),
+    ("fjsp", "cpsat", "ortools"),
+    ("jssp", "cpsat", "ortools"),
+):
+    if find_spec(dependency) is None:
+        try:
+            get_solver(problem, engine)
+        except KeyError:
+            pass
+        else:
+            raise AssertionError((problem, engine))
+    else:
+        assert callable(get_solver(problem, engine))
+        if problem == "cvrptw":
+            assert get_solver("vrptw", engine) is get_solver(problem, engine)
+solver = get_solver("pdp", "ortools")
+assert pickle.loads(pickle.dumps(solver)) == solver
+assert callable(get_solver("flp", "lp"))
+assert "pyvrp" not in sys.modules
+assert "ortools" not in sys.modules
+"""
+    subprocess.run([sys.executable, "-c", script], check=True, capture_output=True, text=True)
 
 
 def test_load_plugins_registers_core_problems() -> None:
     load_plugins()
     for name in ("cvrptw", "op", "pdp", "fjsp"):
         assert name in concept_registry, name
+        assert get_bank(name) is concept_registry.get(name)
 
 
 def test_cvrptw_concepts_label_state() -> None:

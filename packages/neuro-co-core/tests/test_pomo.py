@@ -4,10 +4,10 @@ import torch
 from torch import Tensor, nn
 
 from neuro_co.core.algos.pomo import POMO, POMOConfig
-from neuro_co.core.envs.cvrp import CVRPEnv
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel, PointerDecoder
 from neuro_co.core.models.policy import ConstructivePolicy
+from neuro_co.problems.cvrp.env import CVRPEnv
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 def _build(size: int = 6, batch: int = 8, n_starts: int = 4):

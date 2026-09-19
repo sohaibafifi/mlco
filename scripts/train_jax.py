@@ -1,4 +1,4 @@
-"""Train a JAX attention policy with POMO. See --help for options."""
+"""Train JAX POMO with neuro-co-core and neuro-co-problems[jax] installed."""
 
 from neuro_co.core.jax_backend.train import main
 

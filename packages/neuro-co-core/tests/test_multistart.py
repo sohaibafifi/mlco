@@ -3,7 +3,7 @@
 import torch
 
 from neuro_co.core.algos.multistart import distinct_first_actions, pomo_advantage, replicate
-from neuro_co.core.envs.tsp import TSPEnv
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 def test_replicate_shapes() -> None:

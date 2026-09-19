@@ -2,7 +2,7 @@
 
 import torch
 
-from neuro_co.core.envs.op import OPEnv
+from neuro_co.problems.op.env import OPEnv
 
 
 def test_reset_shapes() -> None:

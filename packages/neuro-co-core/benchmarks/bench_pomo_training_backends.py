@@ -164,8 +164,8 @@ def _torch_worker(
     import torch
 
     from neuro_co.core.algos.pomo import POMO, POMOConfig
-    from neuro_co.core.envs.cvrp import CVRPEnv, CVRPState
     from neuro_co.core.models import AttentionModel
+    from neuro_co.problems.cvrp.env import CVRPEnv, CVRPState
 
     if not allow_cpu and not torch.cuda.is_available():
         raise RuntimeError("Torch CUDA is unavailable")
@@ -305,7 +305,6 @@ def _jax_worker(artifact_root: Path, config: BenchmarkConfig, *, allow_cpu: bool
     import jax.numpy as jnp
     import numpy as np
 
-    from neuro_co.core.envs.jax_backend import JaxCVRPEnv
     from neuro_co.core.jax_backend import (
         AdamConfig,
         JaxAttentionModel,
@@ -313,6 +312,7 @@ def _jax_worker(artifact_root: Path, config: BenchmarkConfig, *, allow_cpu: bool
         POMOTrainState,
         init_adam,
     )
+    from neuro_co.problems.cvrp.jax_env import JaxCVRPEnv
 
     backend = jax.default_backend()
     if not allow_cpu and backend != "gpu":

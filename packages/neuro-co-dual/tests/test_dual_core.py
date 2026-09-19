@@ -2,13 +2,13 @@
 
 import torch
 
-from neuro_co.core.envs.cvrptw import CVRPTWEnv
 from neuro_co.core.models import AttentionModel
 from neuro_co.core.trace import rollout_trace
 from neuro_co.dual.baselines import shape_reward_scalar
 from neuro_co.dual.conditioned import ConstraintConditionedAug, constraint_conditioned_features
 from neuro_co.dual.shaping import shape_reward_global
 from neuro_co.dual.slack import family_slack, family_violation
+from neuro_co.problems.vrptw.env import CVRPTWEnv
 
 
 def _setup(batch: int = 8):

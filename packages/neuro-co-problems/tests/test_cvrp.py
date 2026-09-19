@@ -2,7 +2,7 @@
 
 import torch
 
-from neuro_co.core.envs.cvrp import CVRPEnv
+from neuro_co.problems.cvrp.env import CVRPEnv
 
 
 def test_reset_shapes() -> None:

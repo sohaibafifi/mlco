@@ -8,9 +8,9 @@ import torch
 from neuro_co.core import Trainer
 from neuro_co.core.algos.pomo import POMO, POMOConfig
 from neuro_co.core.algos.reinforce import REINFORCE, REINFORCEConfig
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel
 from neuro_co.core.train_utils import build_scheduler
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 def _model(env):

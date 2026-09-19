@@ -7,8 +7,34 @@ branches into the release repository.
 
 The repository is a uv workspace. Its ten packages share the `neuro_co` namespace
 and can be installed independently. The root is not an installable distribution.
-Keep common policy and environment code in `neuro-co-core`; use package APIs
-instead of duplicating implementations.
+Keep generic environment/state interfaces, models, algorithms, and training in
+`neuro-co-core`. Concrete environments, their states and generators, problem
+concepts, and classical solver adapters belong in `neuro-co-problems`. Register
+environments through `neuro_co.core.env_registry`; use package APIs instead of
+duplicating implementations.
+
+## Environment providers
+
+A package can expose an environment constructor in its `pyproject.toml`:
+
+```toml
+[project.entry-points."neuro_co.envs"]
+"torch.my_problem" = "my_package.env:MyEnv"
+```
+
+Use `jax.my_problem` for a JAX provider. The registry discovers installed entries
+without core importing their implementations. For registration within a process:
+
+```python
+from my_package.env import MyEnv
+from neuro_co.core.env_registry import make_env, register_env
+
+register_env("my_problem", MyEnv, backend="torch")
+env = make_env("my_problem", size=20)
+```
+
+Imports under `neuro_co.core.envs` are compatibility aliases and require
+`neuro-co-problems`; new code should use `neuro_co.problems.<problem>.env`.
 
 ## Local checks
 

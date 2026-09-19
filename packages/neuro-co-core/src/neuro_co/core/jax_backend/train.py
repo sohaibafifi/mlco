@@ -17,7 +17,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from neuro_co.core.envs.jax_backend import JaxCVRPEnv, JaxTSPEnv
+from neuro_co.core.env_registry import make_env
 
 from .am import JaxAttentionModel
 from .optim import AdamConfig
@@ -129,7 +129,7 @@ def train(config: Config, output: Path, resume: Path | None = None) -> Path:
         raise FileExistsError(
             f"{output} contains a run; use --resume from that directory or a new --output"
         )
-    env = JaxCVRPEnv(size=config.size) if config.problem == "cvrp" else JaxTSPEnv(config.size)
+    env = make_env(config.problem, backend="jax", size=config.size)
     model = JaxAttentionModel(
         in_dim=env.encoder_in_dim,
         hidden_dim=config.hidden_dim,

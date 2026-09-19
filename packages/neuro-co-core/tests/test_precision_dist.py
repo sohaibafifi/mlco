@@ -14,9 +14,9 @@ from neuro_co.core.distributed import (
     all_reduce_mean,
     broadcast_params,
 )
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel
 from neuro_co.core.precision import Precision
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 def test_precision_fp32_is_noop() -> None:

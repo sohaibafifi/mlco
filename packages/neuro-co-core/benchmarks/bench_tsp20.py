@@ -1,11 +1,8 @@
-"""TSP-20 wall-clock + quality benchmark: neuro-co-core vs the.
+"""Compare TSP REINFORCE training with eager or compiled execution and POMO.
 
-Runs identical training budget (same steps, batch, hidden_dim) on:
-  1. neuro-co-core eager
-  2. neuro-co-core compiled
-  3. the AttentionModel
-
-Reports steps/sec and final greedy eval tour length on shared eval batch.
+Requires neuro-co-core and neuro-co-problems. Each run uses the same model
+size and training-step budget, with one untimed warmup step. Evaluation uses
+a shared random seed. Results report steps per second and greedy tour length.
 """
 
 import argparse
@@ -16,8 +13,8 @@ import torch
 
 from neuro_co.core.algos.pomo import POMO, POMOConfig
 from neuro_co.core.algos.reinforce import REINFORCE, REINFORCEConfig
-from neuro_co.core.envs.tsp import TSPEnv as CoreTSPEnv
 from neuro_co.core.models import AttentionModel as CoreAM
+from neuro_co.problems.tsp.env import TSPEnv as CoreTSPEnv
 
 
 @dataclass

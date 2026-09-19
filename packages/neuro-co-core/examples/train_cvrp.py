@@ -1,7 +1,9 @@
 """End-to-end CVRP REINFORCE training script.
 
-Single GPU:
-    uv run python packages/neuro-co-core/examples/train_cvrp.py \\
+Install neuro-co-core and neuro-co-problems before running this example.
+
+Single process:
+    uv run --no-sync python packages/neuro-co-core/examples/train_cvrp.py \\
         --train.steps 200 --env.size 20 --train.batch_size 128
 
 Multi GPU:
@@ -24,8 +26,8 @@ from neuro_co.core import (
 from neuro_co.core.algos.reinforce import REINFORCE, REINFORCEConfig
 from neuro_co.core.distributed import init as dist_init
 from neuro_co.core.distributed import shutdown as dist_shutdown
-from neuro_co.core.envs.cvrp import CVRPEnv
 from neuro_co.core.models import AttentionModel
+from neuro_co.problems.cvrp.env import CVRPEnv
 
 
 def main(argv: list[str] | None = None) -> int:

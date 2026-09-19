@@ -6,7 +6,6 @@ import pytest
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
-from neuro_co.core.envs.jax_backend import JaxCVRPEnv, JaxTSPEnv  # noqa: E402
 from neuro_co.core.jax_backend import (  # noqa: E402
     AdamConfig,
     JaxAttentionModel,
@@ -15,6 +14,8 @@ from neuro_co.core.jax_backend import (  # noqa: E402
     pomo_advantage,
     pomo_loss,
 )
+from neuro_co.problems.cvrp.jax_env import JaxCVRPEnv  # noqa: E402
+from neuro_co.problems.tsp.jax_env import JaxTSPEnv  # noqa: E402
 
 
 def test_pomo_advantage_and_loss_have_expected_values() -> None:

@@ -4,7 +4,7 @@ Measures wall-clock per N random-policy rollouts. Excludes any policy
 compute: env-only throughput, no neural network involved.
 
 Requires:
-    uv pip install -e 'packages/neuro-co-core[jax]'
+    uv pip install -e 'packages/neuro-co-core[jax]' -e packages/neuro-co-problems
 
 Usage:
     uv run python packages/neuro-co-core/benchmarks/bench_jax_env.py \\
@@ -19,9 +19,9 @@ import time
 def bench_torch(size: int, batch: int, rollouts: int, device: str) -> float:
     import torch
 
-    from neuro_co.core.envs.tsp import TSPEnv
+    from neuro_co.core.env_registry import make_env
 
-    env = TSPEnv(size=size)
+    env = make_env("tsp", size=size)
     gen = torch.Generator(device=device).manual_seed(0)
 
     # Warmup
@@ -46,9 +46,9 @@ def bench_jax(size: int, batch: int, rollouts: int) -> float:
     import jax
     import jax.numpy as jnp
 
-    from neuro_co.core.envs.jax_backend.tsp import JaxTSPEnv
+    from neuro_co.core.env_registry import make_env
 
-    env = JaxTSPEnv(size=size)
+    env = make_env("tsp", backend="jax", size=size)
     key = jax.random.PRNGKey(0)
 
     @jax.jit

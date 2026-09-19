@@ -9,11 +9,11 @@ import torch
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
-from neuro_co.core.envs.jax_backend.tsp import (  # noqa: E402
+from neuro_co.problems.tsp.env import TSPEnv, TSPState  # noqa: E402
+from neuro_co.problems.tsp.jax_env import (  # noqa: E402
     JaxTSPEnv,
     JaxTSPState,
 )
-from neuro_co.core.envs.tsp import TSPEnv, TSPState  # noqa: E402
 
 
 def test_reset_shapes() -> None:

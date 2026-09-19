@@ -2,10 +2,10 @@
 
 import torch
 
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel
 from neuro_co.probe.discovered import DiscoveredDirections, discover_directions
 from neuro_co.probe.probes import ProbeResult, encoder_layer_count, fit_concept_probes
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 def _left_half(state) -> torch.Tensor:
@@ -75,9 +75,9 @@ def test_discover_directions_pca() -> None:
 def test_explain_policy_end_to_end(tmp_path):
     """Capstone orchestrator: attribution + faithfulness on core, writes JSON."""
 
-    from neuro_co.core.envs.tsp import TSPEnv
     from neuro_co.core.models import AttentionModel
     from neuro_co.probe import explain_policy
+    from neuro_co.problems.tsp.env import TSPEnv
 
     env = TSPEnv(size=6)
     model = AttentionModel(in_dim=env.encoder_in_dim, hidden_dim=16, num_layers=1, num_heads=2)

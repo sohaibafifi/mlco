@@ -4,8 +4,8 @@ import torch
 
 from neuro_co.core.algos.pomo import POMO, POMOConfig
 from neuro_co.core.augment import N_DIHEDRAL, augment_state, best_over_aug, dihedral8
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 def _pairwise_dist(coords: torch.Tensor) -> torch.Tensor:

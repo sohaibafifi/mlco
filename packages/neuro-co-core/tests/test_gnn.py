@@ -5,9 +5,9 @@ from __future__ import annotations
 import torch
 from torch_geometric.nn import TransformerConv
 
-from neuro_co.core.envs.cvrp import CVRPEnv
 from neuro_co.core.factory import make_model
 from neuro_co.core.models import GNNEncoder, PointerDecoder
+from neuro_co.problems.cvrp.env import CVRPEnv
 
 
 def _encoder(**kwargs) -> GNNEncoder:

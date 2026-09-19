@@ -6,9 +6,9 @@ from neuro_co.attr.attribution import gradient_attribution
 from neuro_co.cax.constraint_map import aggregate_trace_by_family, get_constraints
 from neuro_co.cax.cp_minimal_subset import cp_minimal_subset, pac_sample_count
 from neuro_co.cax.lambda_attribution import LambdaAttribution, lambda_attribution
-from neuro_co.core.envs.cvrptw import CVRPTWEnv
-from neuro_co.core.envs.op import OPEnv
 from neuro_co.core.models import AttentionModel
+from neuro_co.problems.op.env import OPEnv
+from neuro_co.problems.vrptw.env import CVRPTWEnv
 
 
 def _setup(env, batch: int = 8):
@@ -105,7 +105,7 @@ def test_feasibility_arithmetic() -> None:
 
 def test_feasibility_op_and_fjsp() -> None:
     from neuro_co.cax.feasibility import is_feasible
-    from neuro_co.core.envs.fjsp import FJSPEnv
+    from neuro_co.problems.fjsp.env import FJSPEnv
 
     op_env = OPEnv(size=6, budget=4.0)
     op_state = op_env.reset(4, generator=torch.Generator().manual_seed(0))
@@ -221,7 +221,7 @@ def test_routing_intervention_preserves_executed_prefix() -> None:
 def test_fjsp_discrete_interventions_preserve_prefix_and_feasibility() -> None:
     from neuro_co.cax.cp_counterfactual import _sample_candidate
     from neuro_co.cax.feasibility import is_feasible
-    from neuro_co.core.envs.fjsp import FJSPEnv
+    from neuro_co.problems.fjsp.env import FJSPEnv
 
     env = FJSPEnv(size=4, ops_per_job=3, num_machines=5)
     _model, state = _setup(env, batch=4)
@@ -271,7 +271,7 @@ def test_fjsp_discrete_interventions_preserve_prefix_and_feasibility() -> None:
 def test_fjsp_counterfactual_and_intervention_use_three_families() -> None:
     from neuro_co.cax.constraint_intervention import constraint_intervention_attribution
     from neuro_co.cax.cp_counterfactual import cp_counterfactual
-    from neuro_co.core.envs.fjsp import FJSPEnv
+    from neuro_co.problems.fjsp.env import FJSPEnv
 
     env = FJSPEnv(size=3, ops_per_job=3, num_machines=5)
     model, state = _setup(env, batch=3)

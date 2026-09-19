@@ -19,9 +19,9 @@ import time
 import torch
 
 from neuro_co.core.algos.pomo import POMO, POMOConfig
-from neuro_co.core.envs.atsp import ATSPEnv
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel, MambaModel, MatNetModel
+from neuro_co.problems.atsp.env import ATSPEnv
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 def _run(model, env, *, steps: int, batch: int, n_starts: int, lr: float, device: str) -> dict:

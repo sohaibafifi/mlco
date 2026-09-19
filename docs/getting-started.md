@@ -9,8 +9,10 @@ cd mlco
 uv sync --all-packages
 ```
 
-This installs the workspace packages in editable mode. Optional backends and
-solvers require extras. Select the package and extra you need:
+This installs the workspace packages in editable mode, including `neuro-co-core`
+and `neuro-co-problems`. Core provides the generic model and training APIs; the
+problems package provides concrete environments. Optional backends and solvers
+require extras:
 
 ```bash
 uv sync --all-packages --extra jax
@@ -22,6 +24,26 @@ Native Mamba kernels have separate `mamba-cuda` and `mamba-macos` extras. They
 require a compatible platform and toolchain. The `mamba` extra uses the PyTorch
 implementation. JAX accelerator installation depends on the target machine;
 the `jax` extra alone does not select a CUDA runtime.
+
+## Python API
+
+For just the model and environment APIs, install both local packages:
+
+```bash
+uv pip install -e packages/neuro-co-core -e packages/neuro-co-problems
+```
+
+```python
+from neuro_co.core.env_registry import available_envs, make_env
+from neuro_co.problems.cvrp.env import CVRPEnv
+
+env = make_env("cvrp", size=20)
+print(available_envs(backend="torch"))
+```
+
+The registry loads installed environment providers. `neuro_co.core.factory.make_env`
+remains available and accepts the same `backend` argument. See
+[training](training.md) for JAX.
 
 ## Small training run
 

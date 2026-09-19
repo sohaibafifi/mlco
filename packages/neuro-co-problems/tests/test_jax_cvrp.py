@@ -9,8 +9,8 @@ import torch
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 
-from neuro_co.core.envs.cvrp import CVRPEnv, CVRPState  # noqa: E402
-from neuro_co.core.envs.jax_backend import JaxCVRPEnv, JaxCVRPState  # noqa: E402
+from neuro_co.problems.cvrp.env import CVRPEnv, CVRPState  # noqa: E402
+from neuro_co.problems.cvrp.jax_env import JaxCVRPEnv, JaxCVRPState  # noqa: E402
 
 
 def _fixed_states() -> tuple[CVRPState, JaxCVRPState]:

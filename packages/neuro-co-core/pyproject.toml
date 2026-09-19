@@ -1,7 +1,7 @@
 [project]
 name = "neuro-co-core"
 version = "0.2.0"
-description = "Environments, neural policies, and training algorithms for combinatorial optimization."
+description = "Environment interfaces, neural policies, and training algorithms."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = { file = "LICENSE" }
@@ -31,7 +31,7 @@ dependencies = [
 validate = ["pydantic>=2.7"]
 logging = ["wandb>=0.17"]
 sweep = ["optuna>=3.6"]
-# Optional end-to-end JAX backend for environments, AM, POMO, and optimization.
+# JAX models, POMO, and optimization; environments live in neuro-co-problems.
 jax = ["jax>=0.10.1"]
 gnn = ["torch-geometric~=2.8.0"]
 mamba = ["mambapy>=1.2"]

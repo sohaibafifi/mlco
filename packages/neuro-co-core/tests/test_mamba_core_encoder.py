@@ -5,9 +5,9 @@ import torch
 
 from neuro_co.core.algos.pomo import POMO, POMOConfig
 from neuro_co.core.algos.reinforce import REINFORCE, REINFORCEConfig
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import ConstructivePolicy, MambaModel, PointerDecoder, SSMEncoder
 from neuro_co.core.models.encoder import Encoder
+from neuro_co.problems.tsp.env import TSPEnv
 
 pytest.importorskip("mambapy")
 

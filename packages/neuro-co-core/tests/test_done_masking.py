@@ -14,9 +14,9 @@ import torch
 
 from neuro_co.core.algos.pomo import _greedy_rollout
 from neuro_co.core.algos.reinforce import _rollout
-from neuro_co.core.envs.cvrp import CVRPEnv
-from neuro_co.core.envs.op import OPEnv
 from neuro_co.core.models import AttentionModel
+from neuro_co.problems.cvrp.env import CVRPEnv
+from neuro_co.problems.op.env import OPEnv
 
 
 class _Padded:

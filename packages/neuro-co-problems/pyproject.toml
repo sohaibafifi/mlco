@@ -1,7 +1,7 @@
 [project]
 name = "neuro-co-problems"
 version = "0.2.0"
-description = "Problem concept banks and baseline solvers for neuro-co."
+description = "Problem environments, concept banks, and baseline solvers for neuro-co."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = { file = "LICENSE" }
@@ -21,6 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+jax = ["jax>=0.10.1"]
 # Classical baseline solvers (optional). pyvrp is pre-1.0; pin the minor.
 pyvrp = ["pyvrp~=0.11.0", "pebble~=5.2"]
 ortools = ["ortools~=9.15"]
@@ -38,6 +39,19 @@ pdp = "neuro_co.problems.pdp"
 fjsp = "neuro_co.problems.fjsp"
 op = "neuro_co.problems.op"
 flp = "neuro_co.problems.flp"
+
+# Constructors are loaded only when their problem and backend are requested.
+[project.entry-points."neuro_co.envs"]
+"torch.tsp" = "neuro_co.problems.tsp.env:TSPEnv"
+"torch.atsp" = "neuro_co.problems.atsp.env:ATSPEnv"
+"torch.cvrp" = "neuro_co.problems.cvrp.env:CVRPEnv"
+"torch.cvrptw" = "neuro_co.problems.vrptw.env:CVRPTWEnv"
+"torch.op" = "neuro_co.problems.op.env:OPEnv"
+"torch.pdp" = "neuro_co.problems.pdp.env:PDPEnv"
+"torch.mtsp" = "neuro_co.problems.mtsp.env:MTSPEnv"
+"torch.fjsp" = "neuro_co.problems.fjsp.env:FJSPEnv"
+"jax.tsp" = "neuro_co.problems.tsp.jax_env:JaxTSPEnv"
+"jax.cvrp" = "neuro_co.problems.cvrp.jax_env:JaxCVRPEnv"
 
 [build-system]
 requires = ["hatchling"]

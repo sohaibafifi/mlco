@@ -1,4 +1,4 @@
-"""Environments, policies, and training primitives for combinatorial optimization."""
+"""Environment interfaces, policies, and training for combinatorial optimization."""
 
 from .algo import Algo
 from .concepts import (

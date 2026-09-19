@@ -31,7 +31,7 @@ Training writes checkpoints and metrics to `--out-dir`. See
 
 | Package | Purpose |
 |---|---|
-| [core](packages/neuro-co-core/README.md) | Environments, policies, training algorithms, Mamba, and optional JAX backend |
+| [core](packages/neuro-co-core/README.md) | Environment interfaces and registry, policies, training algorithms, and optional backends |
 | [cli](packages/neuro-co-cli/README.md) | Training, evaluation, explanation, and experiment commands |
 | [scale](packages/neuro-co-scale/README.md) | Partitioning and hierarchical policies for large routing instances |
 | [aet](packages/neuro-co-aet/README.md) | Energy measurement and Amortized Efficiency Threshold analysis |
@@ -39,7 +39,7 @@ Training writes checkpoints and metrics to `--out-dir`. See
 | [probe](packages/neuro-co-probe/README.md) | Encoder probes and embedding analysis |
 | [cax](packages/neuro-co-cax/README.md) | Constraint-based explanation methods |
 | [dual](packages/neuro-co-dual/README.md) | Multiplier-based cost shaping and policy conditioning |
-| [problems](packages/neuro-co-problems/README.md) | Problem concepts and optional classical solvers |
+| [problems](packages/neuro-co-problems/README.md) | Torch/JAX environments, problem concepts, and optional classical solvers |
 | [xai](packages/neuro-co-xai/README.md) | Convenience imports for the explanation packages |
 
 [Documentation](docs/index.md) covers usage and development.

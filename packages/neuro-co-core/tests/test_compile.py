@@ -7,8 +7,8 @@ produce numerically equivalent output to eager mode.
 import pytest
 import torch
 
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 @pytest.fixture

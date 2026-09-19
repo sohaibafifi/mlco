@@ -2,11 +2,11 @@
 
 import torch
 
-from neuro_co.core.envs.cvrp import CVRPEnv
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel
 from neuro_co.core.models.decoders.pointer import PointerDecoder
 from neuro_co.core.trace import Trace, layer_activations, rollout_trace
+from neuro_co.problems.cvrp.env import CVRPEnv
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 def _model(env):

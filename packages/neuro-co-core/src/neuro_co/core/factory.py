@@ -2,46 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 from neuro_co.core.algos.pomo import POMO, POMOConfig
 from neuro_co.core.algos.ppo import PPO, PPOConfig
 from neuro_co.core.algos.reinforce import REINFORCE, REINFORCEConfig
-from neuro_co.core.envs.atsp import ATSPEnv
-from neuro_co.core.envs.cvrp import CVRPEnv
-from neuro_co.core.envs.cvrptw import CVRPTWEnv
-from neuro_co.core.envs.fjsp import FJSPEnv
-from neuro_co.core.envs.mtsp import MTSPEnv
-from neuro_co.core.envs.op import OPEnv
-from neuro_co.core.envs.pdp import PDPEnv
-from neuro_co.core.envs.tsp import TSPEnv
+from neuro_co.core.env_registry import ENV_BUILDERS, available_envs, make_env, register_env
 from neuro_co.core.models import AttentionModel, GNNModel
-
-ENV_BUILDERS: dict[str, Callable[..., Any]] = {
-    "tsp": TSPEnv,
-    "atsp": ATSPEnv,
-    "cvrp": CVRPEnv,
-    "cvrptw": CVRPTWEnv,
-    "op": OPEnv,
-    "pdp": PDPEnv,
-    "mtsp": MTSPEnv,
-    "fjsp": FJSPEnv,
-}
 
 _ALGOS: dict[str, tuple[Any, Any]] = {
     "reinforce": (REINFORCE, REINFORCEConfig),
     "pomo": (POMO, POMOConfig),
     "ppo": (PPO, PPOConfig),
 }
-
-
-def make_env(problem: str, **kwargs: Any) -> Any:
-    """Construct a core env by problem name (e.g. `make_env("cvrptw", size=50)`)."""
-    key = problem.lower()
-    if key not in ENV_BUILDERS:
-        raise KeyError(f"unknown problem {problem!r}. Available: {sorted(ENV_BUILDERS)}")
-    return ENV_BUILDERS[key](**kwargs)
 
 
 def make_model(
@@ -93,4 +66,4 @@ def make_algo(name: str, model: Any, env: Any, *, device: str = "cpu", **cfg_kwa
     return algo_cls(model=model, env=env, cfg=cfg_cls(**cfg_kwargs), device=device)
 
 
-__all__ = ["ENV_BUILDERS", "make_algo", "make_env", "make_model"]
+__all__ = ["ENV_BUILDERS", "available_envs", "make_algo", "make_env", "make_model", "register_env"]

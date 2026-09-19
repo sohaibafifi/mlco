@@ -1,29 +1,18 @@
-"""Per-problem plug-ins for neuro-co.
+"""Problem environments, concept banks, and classical solver adapters.
 
-This package is a namespace container. Each subpackage
-(`neuro_co.problems.<name>`) registers itself on import via
-`neuro_co.core.concepts.register_concept_bank(...)` plus optional
-`BASELINE_SOLVERS[(name, engine)] = solver_fn` entries for any
-classical solvers it wraps.
-
-Generic tooling discovers installed plug-ins through the
-`neuro_co.problems` entry-point group. See `load_plugins()`.
-
-Public surface:
-
-- `BASELINE_SOLVERS`: `(problem, engine) -> Callable` registry.
-- `get_solver(problem, engine)`: resolver with a
-  KeyError listing available pairs.
-- `load_plugins()` / `force_reload()`: entry-point discovery
-  (idempotent; failed plug-ins logged at WARNING).
+Environment constructors use the ``neuro_co.envs`` entry-point group.
+``load_plugins()`` discovers concept banks and baseline solvers through
+``neuro_co.problems``. Solver backends are imported when called.
 """
 
 from __future__ import annotations
 
 import importlib
 import importlib.metadata
+import importlib.util
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -34,6 +23,40 @@ log = logging.getLogger(__name__)
 # `cost` follows the reward convention (negative = lower-is-better,
 # so callers can `abs(cost)` to compare across solvers).
 BASELINE_SOLVERS: dict[tuple[str, str], Callable[..., Any]] = {}
+
+
+@dataclass(frozen=True, slots=True)
+class _LazySolver:
+    """Pickleable adapter reference for local or worker-process execution."""
+
+    module: str
+    function: str
+
+    @property
+    def __name__(self) -> str:
+        return self.function
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return getattr(importlib.import_module(self.module), self.function)(*args, **kwargs)
+
+
+def _register_lazy_solver(
+    problem: str,
+    engine: str,
+    module: str,
+    function: str,
+    *,
+    dependency: str | None = None,
+    aliases: tuple[str, ...] = (),
+) -> Callable[..., Any] | None:
+    """Register an adapter without importing its optional solver backend."""
+    if dependency is not None and importlib.util.find_spec(dependency) is None:
+        return None
+
+    solve = _LazySolver(module, function)
+    for name in (problem, *aliases):
+        BASELINE_SOLVERS[(name, engine)] = solve
+    return solve
 
 
 def get_solver(problem: str, engine: str) -> Callable[..., Any]:
@@ -100,7 +123,7 @@ def _import_builtin_problems() -> None:
 
 def get_bank(name: str) -> Any:
     """Resolve `name` → `ConceptBank`. Triggers plug-in discovery if needed."""
-    from neuro_co.attr import concept_registry
+    from neuro_co.core.concepts import concept_registry
 
     load_plugins()
     return concept_registry.get(name.lower())

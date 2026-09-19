@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
-#
-# train_all.sh: train one policy per core problem via the `neuroco` CLI.
-#
-# Each run writes outputs/<problem>/best.pt + latest.pt + metrics.json
-# (the run-dir convention consumed by `neuroco eval/explain/probe` and
-# `cax benchmark/adjudicate`). The script uses the core APIs directly.
-#
-# Override any knob from the environment, e.g.:
-#   EPOCHS=100 ALGO=pomo BACKBONE=mamba SIZE=100 bash scripts/train_all.sh
-#
+# Train one policy per registered problem with the installed neuroco CLI.
+# Each run writes best.pt, latest.pt, and metrics.json under OUT_ROOT/<problem>.
+# Install the workspace before running this script.
+# Example: EPOCHS=1 STEPS=2 BATCH=8 DEVICE=cpu bash scripts/train_all.sh
 set -euo pipefail
 
+HERE="$(cd "$(dirname "$0")" && pwd)"
+cd "$HERE/.."
+UV="${UV_BIN:-uv}"
+
 ALGO="${ALGO:-reinforce}"        # reinforce | pomo | ppo
-BACKBONE="${BACKBONE:-am}"       # am | matnet | mamba
+BACKBONE="${BACKBONE:-am}"       # am | gnn | matnet | mamba
 EPOCHS="${EPOCHS:-50}"
 STEPS="${STEPS:-100}"            # steps per epoch
 BATCH="${BATCH:-512}"
@@ -26,10 +24,8 @@ IFS=' ' read -ra PROBLEMS <<< "${PROBLEMS:-tsp atsp cvrp cvrptw op pdp mtsp fjsp
 for problem in "${PROBLEMS[@]}"; do
   size="$SIZE"
   [ "$problem" = "fjsp" ] && size="$FJSP_SIZE"
-  echo "=================================================================="
   echo "[train_all] $problem  algo=$ALGO backbone=$BACKBONE size=$size epochs=$EPOCHS"
-  echo "=================================================================="
-  uv run neuroco train \
+  "$UV" run --no-sync neuroco train \
     --problem "$problem" \
     --algo "$ALGO" \
     --backbone "$BACKBONE" \

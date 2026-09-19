@@ -1971,6 +1971,9 @@ cp = [
     { name = "pebble" },
     { name = "pyvrp" },
 ]
+jax = [
+    { name = "jax" },
+]
 ortools = [
     { name = "ortools" },
 ]
@@ -1981,6 +1984,7 @@ pyvrp = [
 
 [package.metadata]
 requires-dist = [
+    { name = "jax", marker = "extra == 'jax'", specifier = ">=0.10.1" },
     { name = "neuro-co-core", editable = "packages/neuro-co-core" },
     { name = "numpy", specifier = ">=1.24,<3" },
     { name = "ortools", marker = "extra == 'cp'", specifier = "~=9.15" },
@@ -1992,7 +1996,7 @@ requires-dist = [
     { name = "torch", marker = "sys_platform != 'win32'", specifier = "~=2.12" },
     { name = "torch", marker = "sys_platform == 'win32'", specifier = "~=2.12", index = "https://download.pytorch.org/whl/cu130" },
 ]
-provides-extras = ["pyvrp", "ortools", "cp"]
+provides-extras = ["jax", "pyvrp", "ortools", "cp"]
 
 [[package]]
 name = "neuro-co-scale"

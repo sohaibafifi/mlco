@@ -2,7 +2,7 @@
 
 import torch
 
-from neuro_co.core.envs.pdp import PDPEnv
+from neuro_co.problems.pdp.env import PDPEnv
 
 
 def test_reset_shapes_and_types() -> None:

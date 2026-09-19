@@ -8,7 +8,7 @@ only when the `cp` extra (pyvrp / OR-Tools) is installed.
 from __future__ import annotations
 
 from neuro_co.core.concepts import ConceptBank, register_concept_bank
-from neuro_co.problems import BASELINE_SOLVERS
+from neuro_co.problems import _register_lazy_solver
 from neuro_co.problems.vrptw.concepts import CONCEPTS
 
 # Feature-column slices into CVRPTWEnv.build_features:
@@ -23,20 +23,26 @@ register_concept_bank(
     ConceptBank(problem="vrptw", concepts=CONCEPTS, feature_slices=BANK.feature_slices)
 )
 
-try:  # optional pyvrp solver (cp extra)
-    from neuro_co.problems.vrptw.pyvrp import solve_cvrptw
+_solver = _register_lazy_solver(
+    "cvrptw",
+    "pyvrp",
+    "neuro_co.problems.vrptw.pyvrp",
+    "solve_cvrptw",
+    dependency="pyvrp",
+    aliases=("vrptw",),
+)
+if _solver is not None:
+    solve_cvrptw = _solver
 
-    BASELINE_SOLVERS[("cvrptw", "pyvrp")] = solve_cvrptw
-    BASELINE_SOLVERS[("vrptw", "pyvrp")] = solve_cvrptw
-except ImportError:  # pragma: no cover
-    pass
-
-try:  # optional CP-SAT solver (cp extra)
-    from neuro_co.problems.vrptw.cpsat import solve_cvrptw_cpsat
-
-    BASELINE_SOLVERS[("cvrptw", "cpsat")] = solve_cvrptw_cpsat
-    BASELINE_SOLVERS[("vrptw", "cpsat")] = solve_cvrptw_cpsat
-except ImportError:  # pragma: no cover
-    pass
+_solver = _register_lazy_solver(
+    "cvrptw",
+    "cpsat",
+    "neuro_co.problems.vrptw.cpsat",
+    "solve_cvrptw_cpsat",
+    dependency="ortools",
+    aliases=("vrptw",),
+)
+if _solver is not None:
+    solve_cvrptw_cpsat = _solver
 
 __all__ = ["BANK"]

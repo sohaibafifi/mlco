@@ -1,7 +1,7 @@
-"""Optional pure-JAX environment backend for compiled rollouts.
+"""Compatibility imports for the JAX environments in neuro-co-problems.
 
 Install:
-    uv pip install -e 'packages/neuro-co-core[jax]'
+    uv pip install -e 'packages/neuro-co-core[jax]' -e packages/neuro-co-problems
 
 Imports here will fail with a helpful message if JAX is not installed.
 """
@@ -14,7 +14,7 @@ except ImportError as e:  # pragma: no cover
         "  uv pip install -e 'packages/neuro-co-core[jax]'"
     ) from e
 
-from .cvrp import JaxCVRPEnv, JaxCVRPState
-from .tsp import JaxTSPEnv, JaxTSPState
+from neuro_co.problems.cvrp.jax_env import JaxCVRPEnv, JaxCVRPState
+from neuro_co.problems.tsp.jax_env import JaxTSPEnv, JaxTSPState
 
 __all__ = ["JaxCVRPEnv", "JaxCVRPState", "JaxTSPEnv", "JaxTSPState"]

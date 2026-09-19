@@ -14,8 +14,8 @@ from neuro_co.attr.faithfulness import (
     sanity_check,
     sufficiency_keep_rate,
 )
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 def _setup(size: int = 8, batch: int = 16):

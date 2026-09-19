@@ -1,11 +1,10 @@
-"""Optuna hyperparam search: direct, no config framework.
+"""Search POMO hyperparameters with Optuna.
 
-Usage:
-    pip install optuna  # not in default deps
-    python packages/neuro-co-core/examples/sweep_optuna.py \\
+Install neuro-co-core[sweep] and neuro-co-problems. From the repository root:
+    uv run --no-sync python packages/neuro-co-core/examples/sweep_optuna.py \\
         --n_trials 20 --study_name tsp20_pomo --storage sqlite:///optuna.db
 
-Stores trials in SQLite. Best params printed at the end.
+Stores trials in SQLite and prints the best parameters.
 """
 
 import argparse

@@ -12,14 +12,14 @@ from neuro_co.core.algos.pomo import POMO, POMOConfig
 from neuro_co.core.algos.ppo import PPO, PPOConfig
 from neuro_co.core.algos.reinforce import REINFORCE, REINFORCEConfig
 from neuro_co.core.env import Env
-from neuro_co.core.envs.cvrp import CVRPEnv
-from neuro_co.core.envs.cvrptw import CVRPTWEnv
-from neuro_co.core.envs.fjsp import FJSPEnv
-from neuro_co.core.envs.mtsp import MTSPEnv
-from neuro_co.core.envs.op import OPEnv
-from neuro_co.core.envs.pdp import PDPEnv
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel
+from neuro_co.problems.cvrp.env import CVRPEnv
+from neuro_co.problems.fjsp.env import FJSPEnv
+from neuro_co.problems.mtsp.env import MTSPEnv
+from neuro_co.problems.op.env import OPEnv
+from neuro_co.problems.pdp.env import PDPEnv
+from neuro_co.problems.tsp.env import TSPEnv
+from neuro_co.problems.vrptw.env import CVRPTWEnv
 
 ENVS = [
     ("tsp", lambda: TSPEnv(size=6)),

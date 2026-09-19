@@ -2,7 +2,7 @@
 
 import torch
 
-from neuro_co.core.envs.fjsp import FJSPEnv
+from neuro_co.problems.fjsp.env import FJSPEnv
 
 
 def test_reset_shapes() -> None:

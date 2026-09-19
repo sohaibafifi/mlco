@@ -2,8 +2,8 @@
 
 import torch
 
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 def test_encode_shapes() -> None:

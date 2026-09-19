@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# eval.oar: OAR array job: eval + CAX adjudication per core problem.
+# eval.oar: OAR array job: eval + CAX adjudication per registered problem.
 #
-# 4 tasks = 4 core problems (cvrptw, op, pdp, fjsp). CPU-bound (no GPU).
+# 4 tasks = 4 registered problems (cvrptw, op, pdp, fjsp). CPU-bound (no GPU).
 # Consumes the run dirs from train.oar: outputs/<problem>/train_seed<S>/
 # (best.pt + metrics.json). For each problem + seed:
 #   1. `neuroco eval` : policy metrics on a fixed seeded eval set.
@@ -49,10 +49,10 @@ for S in 0 1 2; do
   fi
 
   echo "[eval.oar] eval $P seed=$S"
-  "$UV" run --frozen neuroco eval --problem "$P" --ckpt-path "$CKPT" --seed "$S" "${EVAL_ARGS[@]}"
+  "$UV" run --no-sync neuroco eval --problem "$P" --ckpt-path "$CKPT" --seed "$S" "${EVAL_ARGS[@]}"
 
   echo "[eval.oar] adjudicate $P seed=$S"
-  "$UV" run --frozen python - "$RUN" "$P" <<'PY'
+  "$UV" run --no-sync python - "$RUN" "$P" <<'PY'
 import sys
 from neuro_co.cax.adjudicate import adjudicate_run
 run_dir, problem = sys.argv[1], sys.argv[2]

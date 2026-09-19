@@ -3,9 +3,9 @@
 import pytest
 import torch
 
-from neuro_co.core.envs.cvrptw import CVRPTWEnv
-from neuro_co.core.envs.op import OPEnv
 from neuro_co.dual.slack import family_slack, family_violation
+from neuro_co.problems.op.env import OPEnv
+from neuro_co.problems.vrptw.env import CVRPTWEnv
 
 
 def test_cvrptw_capacity_and_customer_lateness_use_signed_margins() -> None:

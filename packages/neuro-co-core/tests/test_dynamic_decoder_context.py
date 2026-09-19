@@ -7,11 +7,11 @@ from neuro_co.core.algos.pomo import POMO, POMOConfig, _greedy_rollout
 from neuro_co.core.algos.ppo import PPO, PPOConfig
 from neuro_co.core.algos.reinforce import _rollout
 from neuro_co.core.env import get_dynamic_decoder_context
-from neuro_co.core.envs.cvrp import CVRPEnv
-from neuro_co.core.envs.tsp import TSPEnv
 from neuro_co.core.models import AttentionModel
 from neuro_co.core.models.policy import ConstructivePolicy
 from neuro_co.core.trace import rollout_trace
+from neuro_co.problems.cvrp.env import CVRPEnv
+from neuro_co.problems.tsp.env import TSPEnv
 
 
 class _RecordingPolicy(ConstructivePolicy):

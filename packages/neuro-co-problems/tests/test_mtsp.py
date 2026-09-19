@@ -2,7 +2,7 @@
 
 import torch
 
-from neuro_co.core.envs.mtsp import MTSPEnv
+from neuro_co.problems.mtsp.env import MTSPEnv
 
 
 def test_reset_shapes() -> None:
