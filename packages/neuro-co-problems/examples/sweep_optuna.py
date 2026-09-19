@@ -1,7 +1,7 @@
 """Search POMO hyperparameters with Optuna.
 
 Install neuro-co-core[sweep] and neuro-co-problems. From the repository root:
-    uv run --no-sync python packages/neuro-co-core/examples/sweep_optuna.py \\
+    uv run --no-sync python packages/neuro-co-problems/examples/sweep_optuna.py \\
         --n_trials 20 --study_name tsp20_pomo --storage sqlite:///optuna.db
 
 Stores trials in SQLite and prints the best parameters.
@@ -14,7 +14,7 @@ from pathlib import Path
 
 def objective(trial, problem: str, size: int, steps: int):
     """Optuna objective: returns eval tour length (minimize)."""
-    from benchmarks.suite import BenchSpec, run  # type: ignore[import-not-found]
+    from suite import BenchSpec, run  # type: ignore[import-not-found]
 
     spec = BenchSpec(
         problem=problem,
@@ -49,8 +49,8 @@ def main() -> int:
         print("optuna not installed. Install with: pip install optuna", file=sys.stderr)
         return 1
 
-    # Make `benchmarks.suite` importable.
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    # Load the adjacent benchmark suite without importing the repository package.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmarks"))
 
     study = optuna.create_study(
         study_name=args.study_name,

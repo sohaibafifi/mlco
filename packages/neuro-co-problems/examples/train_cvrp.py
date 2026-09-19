@@ -1,14 +1,14 @@
-"""End-to-end TSP REINFORCE training script.
+"""End-to-end CVRP REINFORCE training script.
 
 Install neuro-co-core and neuro-co-problems before running this example.
 
 Single process:
-    uv run --no-sync python packages/neuro-co-core/examples/train_tsp.py \\
-        --train.steps 200 --env.size 20 --train.batch_size 256
+    uv run --no-sync python packages/neuro-co-problems/examples/train_cvrp.py \\
+        --train.steps 200 --env.size 20 --train.batch_size 128
 
-Multi GPU (N processes, one per GPU):
-    torchrun --nproc_per_node=8 packages/neuro-co-core/examples/train_tsp.py \\
-        --train.steps 200 --env.size 20 --train.batch_size 256 \\
+Multi GPU:
+    torchrun --nproc_per_node=8 packages/neuro-co-problems/examples/train_cvrp.py \\
+        --train.steps 200 --env.size 20 --train.batch_size 128 \\
         --train.device cuda --train.precision bf16
 """
 
@@ -27,7 +27,7 @@ from neuro_co.core.algos.reinforce import REINFORCE, REINFORCEConfig
 from neuro_co.core.distributed import init as dist_init
 from neuro_co.core.distributed import shutdown as dist_shutdown
 from neuro_co.core.models import AttentionModel
-from neuro_co.problems.tsp.env import TSPEnv
+from neuro_co.problems.cvrp.env import CVRPEnv
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,12 +35,10 @@ def main(argv: list[str] | None = None) -> int:
     dist = DistEnv.from_env()
     dist_init(dist)
 
-    # Pick per-rank device: cuda:LOCAL_RANK if cuda chosen.
     device = _resolve_device(cfg.train.device, dist.local_rank)
-    # Per-rank seed so each rank samples a different batch.
     seed = cfg.train.seed + dist.rank
 
-    env = TSPEnv(size=cfg.env.size)
+    env = CVRPEnv(size=cfg.env.size)
     model = AttentionModel(
         in_dim=env.encoder_in_dim,
         hidden_dim=cfg.model.hidden_dim,

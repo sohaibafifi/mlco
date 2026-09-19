@@ -8,7 +8,7 @@ MatNet only applies to matrix problems (ATSP), so it is compared there
 against AM fed the distance-matrix rows as node features.
 
 Usage:
-    uv run python packages/neuro-co-core/benchmarks/bench_mamba_backbones.py \\
+    uv run --no-sync python packages/neuro-co-problems/benchmarks/bench_mamba_backbones.py \\
         --size 20 --steps 100 --batch 64 --device cpu
 """
 

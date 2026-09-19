@@ -23,6 +23,9 @@ Concrete Torch classes live in `neuro_co.problems.<problem>.env`. CVRPTW uses
 `neuro_co.problems.tsp.jax_env` and `neuro_co.problems.cvrp.jax_env`; the registry
 accepts `backend="jax"` to select them.
 
+Training examples and hyperparameter sweeps are in [examples](examples/).
+Problem benchmarks are in [benchmarks](benchmarks/).
+
 ```python
 from neuro_co.problems import get_bank, get_solver, load_plugins
 

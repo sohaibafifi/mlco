@@ -4,10 +4,10 @@ Measures wall-clock per N random-policy rollouts. Excludes any policy
 compute: env-only throughput, no neural network involved.
 
 Requires:
-    uv pip install -e 'packages/neuro-co-core[jax]' -e packages/neuro-co-problems
+    uv pip install -e packages/neuro-co-core -e 'packages/neuro-co-problems[jax]'
 
 Usage:
-    uv run python packages/neuro-co-core/benchmarks/bench_jax_env.py \\
+    uv run --no-sync python packages/neuro-co-problems/benchmarks/bench_jax_env.py \\
         --size 50 --batch 1024 --rollouts 100
 """
 

@@ -6,7 +6,7 @@ weights. Policies call encode() and decode_step() separately rather than a DDP
 forward() wrapper.
 
 Launch with torchrun, for example:
-    torchrun --nproc_per_node=8 packages/neuro-co-core/examples/train_tsp.py ...
+    torchrun --nproc_per_node=8 packages/neuro-co-problems/examples/train_tsp.py ...
 
 torchrun supplies WORLD_SIZE, RANK, LOCAL_RANK, MASTER_ADDR, and MASTER_PORT."""
 

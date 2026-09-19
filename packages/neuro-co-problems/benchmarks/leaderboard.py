@@ -1,8 +1,8 @@
-"""Leaderboard: aggregate `benchmarks/results/*.json` into a sorted table.
+"""Aggregate benchmark JSON files into a sorted table.
 
 Usage:
-    python -m benchmarks.leaderboard --results benchmarks/results/
-    python -m benchmarks.leaderboard --results benchmarks/results/ --markdown leaderboard.md
+    uv run --no-sync python packages/neuro-co-problems/benchmarks/leaderboard.py \\
+        --results outputs/benchmarks/ --markdown outputs/benchmarks/leaderboard.md
 """
 
 import argparse

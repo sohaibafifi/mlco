@@ -1,13 +1,13 @@
-# W&B Sweep: TSP-20 POMO hyperparam search.
+# W&B sweep template for TSP-20 POMO.
 #
 # Run:
-#   wandb sweep packages/neuro-co-core/examples/sweep_wandb.yaml
+#   wandb sweep packages/neuro-co-problems/examples/sweep_wandb.yaml
 #   wandb agent <sweep_id>
 #
-# Each agent run executes `command` with sampled params. Agents log
-# eval_tour_length_final via W&B; sweep controller picks `goal: minimize`.
+# The suite writes metrics to JSON. Add W&B metric logging to the runner
+# before using this template to rank trials.
 
-program: packages/neuro-co-core/benchmarks/suite.py
+program: packages/neuro-co-problems/benchmarks/suite.py
 method: bayes
 metric:
   name: eval_tour_length_final
@@ -43,6 +43,7 @@ command:
   - ${env}
   - uv
   - run
+  - --no-sync
   - python
   - ${program}
-  - ${args_no_hyphens}
+  - ${args}

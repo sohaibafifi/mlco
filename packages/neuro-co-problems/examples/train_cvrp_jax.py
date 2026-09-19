@@ -1,6 +1,6 @@
 """Train a JAX attention policy on CVRP, with metrics and resumable checkpoints.
 
-    python packages/neuro-co-core/examples/train_cvrp_jax.py --steps 100
+    python packages/neuro-co-problems/examples/train_cvrp_jax.py --steps 100
 
 Install neuro-co-core and neuro-co-problems[jax]. Use --problem tsp to train
 on TSP. See --help for model and training options.

@@ -9,7 +9,9 @@ The repository is a uv workspace. Its ten packages share the `neuro_co` namespac
 and can be installed independently. The root is not an installable distribution.
 Keep generic environment/state interfaces, models, algorithms, and training in
 `neuro-co-core`. Concrete environments, their states and generators, problem
-concepts, and classical solver adapters belong in `neuro-co-problems`. Register
+concepts, and classical solver adapters belong in `neuro-co-problems`. Problem
+examples and benchmarks live in that package's `examples/` and `benchmarks/`
+directories. Core benchmarks measure generic model components. Register
 environments through `neuro_co.core.env_registry`; use package APIs instead of
 duplicating implementations.
 
@@ -33,8 +35,8 @@ register_env("my_problem", MyEnv, backend="torch")
 env = make_env("my_problem", size=20)
 ```
 
-Imports under `neuro_co.core.envs` are compatibility aliases and require
-`neuro-co-problems`; new code should use `neuro_co.problems.<problem>.env`.
+Import concrete environments from `neuro_co.problems.<problem>.env` or select
+them through `make_env()`.
 
 ## Local checks
 

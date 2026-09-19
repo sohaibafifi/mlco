@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Benchmark grid: TSP × CVRP × algos × seeds.
-# Writes one JSON per cell to benchmarks/results/grid/.
+# Writes one JSON per cell under OUT_DIR, defaulting to outputs/benchmarks/grid.
 #
-# Usage: bash packages/neuro-co-core/benchmarks/run_grid.sh [device]
+# Usage: bash packages/neuro-co-problems/benchmarks/run_grid.sh [device]
 # Default device: mps.
 
 set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+cd "$HERE/../../.."
 DEVICE="${1:-mps}"
-OUT_DIR="packages/neuro-co-core/benchmarks/results/grid"
+OUT_DIR="${OUT_DIR:-outputs/benchmarks/grid}"
 mkdir -p "$OUT_DIR"
 
 STEPS="${STEPS:-50}"
@@ -23,7 +25,7 @@ run() {
   local fname="${OUT_DIR}/${problem}${size}_${algo}_seed${seed}.json"
   echo "===> $fname"
   # shellcheck disable=SC2086
-  uv run python packages/neuro-co-core/benchmarks/suite.py \
+  uv run --no-sync python "$HERE/suite.py" \
     --problem "$problem" --size "$size" --algo "$algo" \
     --steps "$STEPS" --batch_size "$BATCH" --eval_batch_size "$EVAL_BATCH" \
     --hidden_dim "$HIDDEN" --num_layers "$LAYERS" --num_heads "$HEADS" \
@@ -54,4 +56,4 @@ done
 
 echo
 echo "Done. Render leaderboard:"
-echo "  uv run python packages/neuro-co-core/benchmarks/leaderboard.py --results $OUT_DIR"
+echo "  uv run --no-sync python packages/neuro-co-problems/benchmarks/leaderboard.py --results $OUT_DIR"
