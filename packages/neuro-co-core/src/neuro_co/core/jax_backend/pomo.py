@@ -207,6 +207,27 @@ class JaxPOMO:
     def greedy_rollout(self, params: AttentionModelParams, problem_state: Any) -> jax.Array:
         """Decode one greedy solution per problem without forced POMO starts."""
 
+        reward, _ = self._greedy_rollout(params, problem_state, export_actions=False)
+        return reward
+
+    def greedy_rollout_actions(self, params: AttentionModelParams, problem_state: Any) -> jax.Array:
+        """Return action indices shaped ``(batch, max_steps)``, padded with -1.
+
+        Actions follow the environment's convention. The initial node and any
+        implicit closing edge are not included. Completed rows receive -1 in
+        subsequent steps.
+        """
+
+        _, actions = self._greedy_rollout(params, problem_state, export_actions=True)
+        return cast(jax.Array, actions)
+
+    def _greedy_rollout(
+        self,
+        params: AttentionModelParams,
+        problem_state: Any,
+        *,
+        export_actions: bool,
+    ) -> tuple[jax.Array, jax.Array | None]:
         features = self.env.build_features(problem_state)
         node_embs, graph_emb = self.model.encode(params, features, training=False)
         decoder_cache = self.model.precompute_decoder_cache(params, node_embs)
@@ -217,7 +238,7 @@ class JaxPOMO:
             jnp.zeros((batch,), dtype=jnp.bool_),
         )
 
-        def body(carry: tuple[Any, ...], _unused: None) -> tuple[tuple[Any, ...], None]:
+        def body(carry: tuple[Any, ...], _unused: None) -> tuple[tuple[Any, ...], jax.Array | None]:
             state, total_reward, done_acc = carry
             active = ~done_acc
             mask = self.env.action_mask(state)
@@ -235,10 +256,13 @@ class JaxPOMO:
             action = jnp.argmax(logits, axis=-1).astype(jnp.int32)
             state, reward, done = self.env.step(state, action)
             total_reward = total_reward + jnp.where(active, reward, 0.0)
-            return (state, total_reward, done_acc | done), None
+            actions = jnp.where(active, action, -1) if export_actions else None
+            return (state, total_reward, done_acc | done), actions
 
-        final, _ = jax.lax.scan(body, initial, xs=None, length=self.env.max_steps(problem_state))
-        return final[1]
+        final, actions = jax.lax.scan(
+            body, initial, xs=None, length=self.env.max_steps(problem_state)
+        )
+        return final[1], jnp.swapaxes(actions, 0, 1) if actions is not None else None
 
 
 def distinct_first_actions(mask: jax.Array, n_starts: int, key: jax.Array) -> jax.Array:

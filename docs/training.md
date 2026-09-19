@@ -64,3 +64,13 @@ uv run --no-sync python scripts/train_jax.py --problem cvrp \
 
 JAX checkpoints are separate from PyTorch checkpoints. The JAX backend does not
 provide the PyTorch Mamba, MatNet, explanation, or scheduling workflows.
+
+## Exporting solutions
+
+`neuro_co.core.inference.greedy_rollout_actions(model, env, state)` returns Torch
+actions without retaining a full trace. JAX provides
+`JaxPOMO.greedy_rollout_actions(params, state)`, which supports `jax.jit`.
+Both accept an initially unfinished environment state and return integer arrays
+with shape `(batch, steps)`. Completed rows use `-1` padding; Torch trims trailing
+columns once the batch finishes. Add the initial city when exporting a TSP tour.
+CVRP actions include depot returns, so split the sequence at each return.

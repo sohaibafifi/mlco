@@ -125,6 +125,58 @@ def test_jitted_greedy_rollout_returns_finite_cost(env, in_dim) -> None:
     assert np.all(np.asarray(reward) < 0.0)
 
 
+def test_greedy_tsp_actions_form_tours_with_matching_cost() -> None:
+    env = JaxTSPEnv(size=5)
+    model = JaxAttentionModel(hidden_dim=8, num_layers=1, num_heads=2)
+    algo = JaxPOMO(model=model, env=env, n_starts=2)
+    params = model.init(jax.random.key(7))
+    problems = env.reset(jax.random.key(8), batch_size=2)
+
+    actions = np.asarray(jax.jit(algo.greedy_rollout_actions)(params, problems))
+    reward = np.asarray(algo.greedy_rollout(params, problems))
+
+    assert actions.shape == (2, 4)
+    assert actions.dtype == np.int32
+    for coords, route, expected_reward in zip(
+        np.asarray(problems.coords), actions, reward, strict=True
+    ):
+        np.testing.assert_array_equal(np.sort(route), np.arange(1, env.size))
+        closed_tour = coords[np.concatenate(([0], route, [0]))]
+        length = np.linalg.norm(np.diff(closed_tour, axis=0), axis=1).sum()
+        assert length == pytest.approx(-expected_reward, rel=1e-6)
+
+
+def test_greedy_cvrp_actions_preserve_capacity_cost_and_completion_padding() -> None:
+    env = JaxCVRPEnv(size=4, capacity=4.0)
+    model = JaxAttentionModel(in_dim=3, hidden_dim=8, num_layers=1, num_heads=2)
+    algo = JaxPOMO(model=model, env=env, n_starts=2)
+    params = model.init(jax.random.key(7))
+    problems = env.reset(jax.random.key(8), batch_size=2)._replace(
+        demand=jnp.asarray([[0, 1, 1, 1, 1], [0, 3, 3, 3, 3]], dtype=jnp.float32)
+    )
+
+    actions = np.asarray(jax.jit(algo.greedy_rollout_actions)(params, problems))
+    reward = np.asarray(algo.greedy_rollout(params, problems))
+
+    assert actions.shape == (2, 2 * env.size)
+    assert np.any(actions[0] == -1)
+    assert np.all(actions[1] >= 0)
+    for coords, demand, padded_route, expected_reward in zip(
+        np.asarray(problems.coords), np.asarray(problems.demand), actions, reward, strict=True
+    ):
+        route = padded_route[padded_route >= 0]
+        assert route[-1] == 0
+        assert np.all(padded_route[len(route) :] == -1)
+        np.testing.assert_array_equal(np.sort(route[route > 0]), np.arange(1, env.size + 1))
+        load = 0.0
+        for node in route:
+            load = 0.0 if node == 0 else load + demand[node]
+            assert load <= env.capacity
+        tours = coords[np.concatenate(([0], route))]
+        length = np.linalg.norm(np.diff(tours, axis=0), axis=1).sum()
+        assert length == pytest.approx(-expected_reward, rel=1e-6)
+
+
 def test_loss_gradient_does_not_flow_through_reward_baseline() -> None:
     log_probability = jnp.asarray([[-0.2, -0.4, -0.8]])
 
