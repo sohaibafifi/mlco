@@ -1,0 +1,41 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "basic",
+  "useLibraryCodeForTypes": true,
+  "extraPaths": [
+    "packages/neuro-co-aet/src",
+    "packages/neuro-co-attr/src",
+    "packages/neuro-co-cax/src",
+    "packages/neuro-co-cli/src",
+    "packages/neuro-co-core/src",
+    "packages/neuro-co-dual/src",
+    "packages/neuro-co-probe/src",
+    "packages/neuro-co-problems/src",
+    "packages/neuro-co-scale/src",
+    "packages/neuro-co-xai/src"
+  ],
+  "include": [
+    "packages"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.venv",
+    "outputs",
+    "site",
+    "old",
+    "examples"
+  ],
+  "reportMissingImports": "warning",
+  "reportMissingTypeStubs": "none",
+  "reportMissingModuleSource": "none",
+  "reportPrivateImportUsage": "none",
+  "reportAttributeAccessIssue": "warning",
+  "reportArgumentType": "warning",
+  "reportReturnType": "warning",
+  "reportOptionalMemberAccess": "warning",
+  "reportOptionalSubscript": "warning",
+  "reportCallIssue": "warning"
+}

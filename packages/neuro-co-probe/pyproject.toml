@@ -1,0 +1,40 @@
+[project]
+name = "neuro-co-probe"
+version = "0.2.0"
+description = "Encoder probes, discovered directions, and explanation reports."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { file = "LICENSE" }
+authors = [{ name = "Sohaib Afifi", email = "me@sohaibafifi.com" }]
+keywords = ["probing", "interpretability", "explainable-ai", "neural-combinatorial-optimization"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "torch~=2.12",
+  "numpy>=1.24,<3",
+  "matplotlib~=3.10",
+  "scikit-learn~=1.8",
+  "neuro-co-core>=0.2.0,<0.3",
+]
+
+# `explain_policy` orchestrator + `neuroco probe` CLI add neuro-co-attr
+# (attribution + faithfulness). Probing / discovery work on core alone.
+[project.optional-dependencies]
+explain = [
+  "neuro-co-attr>=0.2.0,<0.3",
+]
+
+[project.scripts]
+neuroco-explain-report = "neuro_co.probe.report:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/neuro_co"]

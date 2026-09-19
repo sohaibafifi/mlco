@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv python install ${{ matrix.python }}
+      - name: Install workspace and portable backends
+        run: >-
+          uv sync --frozen --all-packages --python ${{ matrix.python }}
+          --extra jax --extra gnn --extra mamba --extra cp
+          --extra report --extra analysis --extra experiments
+      - name: Check package versions
+        run: uv run --no-sync python scripts/version.py --check
+      - run: uv run --no-sync ruff check packages scripts
+      - run: uv run --no-sync ruff format --check packages scripts
+      - name: Type check
+        run: uv run --no-sync pyright packages
+      - run: uv run --no-sync pytest packages -m "not gpu and not slow"
+      - name: Check command entry points
+        run: |
+          uv run --no-sync neuroco --help
+          uv run --no-sync neuroco-scale --help
+          uv run --no-sync python scripts/train_jax.py --help
+      - name: Build wheels from source archives
+        run: uv build --all-packages --out-dir dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions-py${{ matrix.python }}
+          path: dist/

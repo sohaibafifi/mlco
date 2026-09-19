@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+#
+# eval.oar: OAR array job: eval + CAX adjudication per core problem.
+#
+# 4 tasks = 4 core problems (cvrptw, op, pdp, fjsp). CPU-bound (no GPU).
+# Consumes the run dirs from train.oar: outputs/<problem>/train_seed<S>/
+# (best.pt + metrics.json). For each problem + seed:
+#   1. `neuroco eval` : policy metrics on a fixed seeded eval set.
+#   2. CAX adjudication: lambda-attribution modes vs CP-counterfactual
+#      (via `neuro_co.cax.adjudicate.adjudicate_run`).
+#
+# Submit:  oarsub -S ./eval.oar
+# Single:  oarsub -S "./eval.oar --array 1"   (cvrptw only)
+
+#OAR -n Eval-CP
+#OAR -l nodes=1/core=32,walltime=4
+#OAR -O logs/eval.%jobid%.out
+#OAR -E logs/eval.%jobid%.err
+#OAR -t idempotent
+#OAR -t besteffort
+#OAR --array 4
+
+set -eo pipefail
+
+mkdir -p logs experiments/cax_v2
+
+. /nfs/opt/env/env.sh
+module load conda
+conda activate torch-2.7
+
+PROBLEMS=(cvrptw op pdp fjsp)
+IDX=$((OAR_ARRAY_INDEX - 1))
+P=${PROBLEMS[$IDX]}
+UV=${UV_BIN:-uv}
+case $P in
+  cvrptw) EVAL_ARGS=(--algo pomo --size 50) ;;
+  fjsp) EVAL_ARGS=(--algo pomo --size 10) ;;
+  *) EVAL_ARGS=(--algo reinforce --size 50) ;;
+esac
+
+echo "[OAR $OAR_JOB_ID idx=$IDX] eval + adjudicate $P"
+
+for S in 0 1 2; do
+  RUN=outputs/$P/train_seed$S
+  CKPT=$RUN/best.pt
+  if [ ! -f "$CKPT" ]; then
+    echo "[eval.oar] WARN missing $CKPT, skip seed $S"
+    continue
+  fi
+
+  echo "[eval.oar] eval $P seed=$S"
+  "$UV" run --frozen neuroco eval --problem "$P" --ckpt-path "$CKPT" --seed "$S" "${EVAL_ARGS[@]}"
+
+  echo "[eval.oar] adjudicate $P seed=$S"
+  "$UV" run --frozen python - "$RUN" "$P" <<'PY'
+import sys
+from neuro_co.cax.adjudicate import adjudicate_run
+run_dir, problem = sys.argv[1], sys.argv[2]
+# proxy mode only (no OR-Tools); add "lp"/"subgrad" with the cp extra.
+adjudicate_run(run_dir, problem=problem, modes=("proxy",),
+               num_instances=16, max_steps=12, cf_shots=128)
+print(f"[adjudicate] wrote {run_dir}/adjudication.json")
+PY
+done

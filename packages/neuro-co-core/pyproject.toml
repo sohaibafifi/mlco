@@ -1,0 +1,46 @@
+[project]
+name = "neuro-co-core"
+version = "0.2.0"
+description = "Environments, neural policies, and training algorithms for combinatorial optimization."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { file = "LICENSE" }
+authors = [{ name = "Sohaib Afifi", email = "me@sohaibafifi.com" }]
+keywords = [
+  "neural-combinatorial-optimization",
+  "reinforcement-learning",
+  "torch-compile",
+  "tsp",
+  "cvrp",
+]
+classifiers = [
+  "Development Status :: 1 - Planning",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "torch~=2.12",
+  "numpy>=1.24,<3",
+  "jaxtyping>=0.2.34",
+  "tyro>=0.9",
+]
+
+[project.optional-dependencies]
+validate = ["pydantic>=2.7"]
+logging = ["wandb>=0.17"]
+sweep = ["optuna>=3.6"]
+# Optional end-to-end JAX backend for environments, AM, POMO, and optimization.
+jax = ["jax>=0.10.1"]
+gnn = ["torch-geometric~=2.8.0"]
+mamba = ["mambapy>=1.2"]
+mamba-cuda = ["mambapy>=1.2", "mamba-ssm>=2.2", "causal-conv1d>=1.4"]
+mamba-macos = ["mambapy>=1.2", "mamba-ssm-macos>=0.1"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/neuro_co"]

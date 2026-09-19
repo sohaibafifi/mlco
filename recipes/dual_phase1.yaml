@@ -1,0 +1,61 @@
+# dual_phase1 -- Single-cell wiring validation for dual-guided training.
+#
+# Runs ONE method (`dual-lp`) on ONE problem (CVRPTW) for ONE seed,
+# with `DualShapingCallback` + CSVLogger wired through the
+# `train.overrides` block. Used to confirm:
+#
+#   * The Hydra `+trainer.callbacks=[...]` syntax resolves.
+#   * The callback actually fires (`dual/bonus_mean` non-zero in
+#     `outputs/vrptw/train_seed0/dual_logs/version_0/metrics.csv`).
+#   * `val/reward` keeps converging with the shaped signal.
+#
+# Compute: ~30 min on a single GPU at the pinned epoch/data sizes.
+# If everything in this recipe works, scale to the full sweep
+# (see notes at the bottom of this file).
+#
+name: dual_phase1
+description: |
+  Wiring-validation single-cell run for the dual-guided training
+  callback. Trains CVRPTW with LP-relaxation dual shaping for 20
+  epochs, persists `dual/*` metrics via CSVLogger, and runs the
+  PyVRP HGS baseline + Lightning eval afterwards so the gap-to-BKS
+  number lands in the same run directory.
+
+parallel: 1
+
+problems:
+  vrptw:
+    seeds: [0]
+    train:
+      overrides:
+        - "trainer.max_epochs=20"
+        - "model.train_data_size=5000"
+        - "+trainer.logger={_target_:lightning.pytorch.loggers.CSVLogger,save_dir:${paths.output_dir},name:dual_logs}"
+        - "+trainer.callbacks=[{_target_:neuro_co.dual.callback.DualShapingCallback,problem:vrptw,alpha:0.1,multipliers:lp,_partial_:false}]"
+    baseline:
+      overrides:
+        - "baseline.num_problems=20"
+        - "baseline.max_runtime_s=2.0"
+    eval:
+      overrides: []
+
+# Notes for Phase 2 (full sweep) once Phase 1 is green:
+#
+#   1. The recipe DSL (packages/neuro-co-cli/.../experiment.py
+#      `_run_stage_sweep`) currently exposes one `overrides` block
+#      per (problem, stage). To compare 4 methods x 3 problems x 3
+#      seeds = 36 cells with distinct callbacks, extend the DSL to
+#      accept a `method_overrides: {name: [overrides]}` map under
+#      `train`, or ship 4 recipes:
+#
+#        recipes/dual_vanilla.yaml
+#        recipes/dual_scalar.yaml
+#        recipes/dual_lagrange.yaml
+#        recipes/dual_lp.yaml
+#
+#      and aggregate via `neuroco results outputs/ --out dual_v1.parquet`.
+#
+#   2. Each cell needs its own `outputs/<problem>/train_seed<N>_<method>/`
+#      to avoid checkpoint collisions. The single-recipe path already
+#      adds a `_<method>` suffix when `methods:` is set; the DSL
+#      extension would need to mirror that for the train stage.

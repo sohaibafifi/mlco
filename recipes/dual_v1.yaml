@@ -1,0 +1,39 @@
+# dual_v1 -- Dual-Guided Neural CO head-to-head sweep (stub).
+#
+# Compares four reward-shaping strategies on three problems x three
+# seeds = 36 cells. The current recipe DSL (`experiment.py`
+# `_run_stage_sweep`) only accepts a single `overrides` block per
+# (problem, stage), so a 4-method comparison cannot be expressed in
+# one YAML today.
+#
+# Two clean paths to ship Phase 2:
+#
+#   (A) Extend the DSL: under `train:` accept
+#       `method_overrides: {name: [overrides...]}` and loop in
+#       `_run_stage_sweep` exactly like the existing `methods` list
+#       does for `xai.method=`, appending the per-method overrides
+#       and the method name as the output-dir suffix. ~30 lines
+#       in `experiment.py`.
+#
+#   (B) Ship four recipes:
+#         recipes/dual_v1_vanilla.yaml
+#         recipes/dual_v1_scalar.yaml
+#         recipes/dual_v1_lagrange.yaml
+#         recipes/dual_v1_lp.yaml
+#       Each is a single-method sweep. Aggregate with
+#       `neuroco results outputs/ --out experiments/dual_v1/results.parquet`.
+#
+# Until one of these lands, validate the wiring with
+# `recipes/dual_phase1.yaml` (single cell, single method).
+#
+name: dual_v1
+description: |
+  Phase-3 head-to-head sweep. NOT runnable as-is; see the comment
+  block above for the two paths to a working Phase-2 sweep.
+
+parallel: 4
+
+# Intentionally left empty -- this file documents the design;
+# the runnable artefact is `recipes/dual_phase1.yaml` until path
+# (A) or (B) above lands.
+problems: {}

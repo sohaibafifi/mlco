@@ -1,0 +1,48 @@
+# W&B Sweep: TSP-20 POMO hyperparam search.
+#
+# Run:
+#   wandb sweep packages/neuro-co-core/examples/sweep_wandb.yaml
+#   wandb agent <sweep_id>
+#
+# Each agent run executes `command` with sampled params. Agents log
+# eval_tour_length_final via W&B; sweep controller picks `goal: minimize`.
+
+program: packages/neuro-co-core/benchmarks/suite.py
+method: bayes
+metric:
+  name: eval_tour_length_final
+  goal: minimize
+parameters:
+  problem:
+    value: tsp
+  size:
+    value: 20
+  algo:
+    value: pomo
+  steps:
+    value: 200
+  batch_size:
+    values: [32, 64, 128]
+  hidden_dim:
+    values: [64, 128, 256]
+  num_layers:
+    values: [2, 3, 4]
+  num_heads:
+    value: 8
+  lr:
+    distribution: log_uniform_values
+    min: 1.0e-5
+    max: 1.0e-3
+  n_starts:
+    values: [10, 20, 30]
+  seed:
+    value: 0
+  output:
+    value: benchmarks/results/sweep.json
+command:
+  - ${env}
+  - uv
+  - run
+  - python
+  - ${program}
+  - ${args_no_hyphens}

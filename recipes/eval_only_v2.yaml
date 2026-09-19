@@ -1,0 +1,51 @@
+# eval_only_v2 - rerun ONLY the eval stage on baseline_v2 ckpts.
+#
+# baseline_v2's first pass produced trained ckpts but eval stage
+# crashed on a wrong Hydra override key (`eval.num_problems`,
+# fixed in baseline_v2.yaml to `model.test_data_size`). This
+# lighter recipe re-runs only the eval stage on the surviving
+# ckpts so we get policy_cost numbers for the convergence
+# receipt without paying the ~8-10 GPU-hour retraining cost.
+#
+# Run: `uv run neuroco run-experiment recipes/eval_only_v2.yaml`
+# Expected wall-clock: <10 min total across all 5 problems.
+name: eval_only_v2
+description: |
+  Re-run eval stage only on baseline_v2 trained ckpts. Train +
+  baseline + explain + probe stages are absent on purpose; reuses
+  outputs/<problem>/train_seed*/checkpoints/last.ckpt produced by
+  the previous baseline_v2 run.
+
+parallel: 1
+
+problems:
+  vrptw:
+    seeds: [0, 1, 2]
+    eval:
+      overrides:
+        - "model.test_data_size=100"
+  jssp:
+    seeds: [0, 1, 2]
+    eval:
+      overrides:
+        - "model.test_data_size=50"
+  op:
+    seeds: [0, 1, 2]
+    eval:
+      overrides:
+        - "model.test_data_size=20"
+  flp:
+    seeds: [0, 1, 2]
+    eval:
+      overrides:
+        - "model.test_data_size=20"
+  pdp:
+    seeds: [0, 1, 2]
+    eval:
+      overrides:
+        - "model.test_data_size=20"
+  fjsp:
+    seeds: [0, 1, 2]
+    eval:
+      overrides:
+        - "model.test_data_size=20"

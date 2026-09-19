@@ -1,0 +1,28 @@
+[project]
+name = "neuro-co-xai"
+version = "0.2.0"
+description = "Compatibility imports for attribution, probes, and constraint explanations."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { file = "LICENSE" }
+authors = [{ name = "Sohaib Afifi", email = "me@sohaibafifi.com" }]
+keywords = ["explainable-ai", "interpretability", "attribution", "faithfulness", "facade"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "neuro-co-attr>=0.2.0,<0.3",
+  "neuro-co-probe>=0.2.0,<0.3",
+  "neuro-co-cax>=0.2.0,<0.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/neuro_co"]

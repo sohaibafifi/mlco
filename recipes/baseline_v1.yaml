@@ -1,0 +1,73 @@
+# baseline_v1 - characterise existing methods before any novel work.
+#
+# 5 problems x 3 seeds x 4 attribution methods + probes + baselines.
+# Output: experiments/baseline_v1/results.parquet + figs/ + manifest.json.
+# Audit before running: `neuroco estimate-budget experiments/baseline_v1.yaml`.
+name: baseline_v1
+description: |
+  Phase-2 baseline experiment suite. Establishes attribution-quality,
+  sanity-pass, and cross-seed stability numbers for the 4 existing
+  methods (gradient, IG, contrastive, DeepLIFT) on the 5 built-in
+  problems. Feeds the gap-hunting analysis that motivates the novel
+  method in phase 3.
+
+parallel: 4
+
+problems:
+  vrptw:
+    seeds: [0, 1, 2]
+    train:
+      overrides:
+        - "trainer.max_epochs=5"
+        - "model.train_data_size=5000"
+    baseline:
+      overrides:
+        - "baseline.num_problems=20"
+        - "baseline.max_runtime_s=2.0"
+    eval:
+      overrides: []
+    explain:
+      methods: [gradient, ig, contrastive, deeplift]
+      overrides:
+        - "xai.num_instances=8"
+        - "xai.run_sufficiency=true"
+        - "xai.run_sanity_check=true"
+        - "xai.sanity_trials=3"
+        - "xai.run_encoder_probes=true"
+    probe:
+      args: ["--num-instances", "16", "--epochs", "200", "--pca-components", "10"]
+
+  jssp:
+    seeds: [0, 1, 2]
+    train:
+      overrides: ["trainer.max_epochs=5"]
+    baseline:
+      overrides: ["baseline.max_runtime_s=5.0"]
+    explain:
+      methods: [gradient, ig, contrastive, deeplift]
+      overrides: ["xai.num_instances=4"]
+
+  pdp:
+    seeds: [0, 1, 2]
+    train:
+      overrides: ["trainer.max_epochs=5"]
+    baseline:
+      overrides: ["baseline.max_runtime_s=2.0"]
+    explain:
+      methods: [gradient, contrastive]
+
+  fjsp:
+    seeds: [0, 1, 2]
+    train:
+      overrides: ["trainer.max_epochs=5"]
+    explain:
+      methods: [gradient, deeplift]
+
+  op:
+    seeds: [0, 1, 2]
+    train:
+      overrides: ["trainer.max_epochs=5"]
+    baseline:
+      overrides: ["baseline.max_runtime_s=5.0"]
+    explain:
+      methods: [gradient, ig]

@@ -1,0 +1,104 @@
+# Development workspace. Install packages with uv sync --all-packages.
+
+[tool.uv]
+no-build-isolation-package = ["mamba-ssm", "causal-conv1d"]
+
+[tool.uv.extra-build-dependencies]
+mamba-ssm     = ["torch", "packaging", "wheel", "setuptools", "ninja"]
+causal-conv1d = ["torch", "packaging", "wheel", "setuptools", "ninja"]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32'" }]
+neuro-co-aet = { workspace = true }
+neuro-co-attr = { workspace = true }
+neuro-co-probe = { workspace = true }
+neuro-co-xai = { workspace = true }
+neuro-co-problems = { workspace = true }
+neuro-co-cli = { workspace = true }
+neuro-co-cax = { workspace = true }
+neuro-co-dual = { workspace = true }
+neuro-co-core = { workspace = true }
+neuro-co-scale = { workspace = true }
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[dependency-groups]
+dev = [
+  "ruff>=0.6.0",
+  "pyright>=1.1.380",
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "pytest-xdist>=3.6",
+  "hypothesis>=6.100",
+  "pre-commit>=3.8",
+  "mkdocs-material>=9.5",
+  "mkdocstrings[python]>=0.25",
+  "mkdocs-gen-files>=0.5",
+  "mkdocs-literate-nav>=0.6",
+  "ipykernel>=7.2.0",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["old/", "**/__pycache__", ".venv/", "docs/site/"]
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "W",   # pycodestyle / pyflakes
+  "I",             # isort
+  "B",             # flake8-bugbear
+  "UP",            # pyupgrade
+  "SIM",           # flake8-simplify
+  "RUF",           # ruff-specific
+  "N",             # pep8-naming
+]
+ignore = ["E501", "B008", "N806", "N812", "N803"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["B", "N", "SIM"]
+"benchmarks/**" = ["N"]
+# Energy / analysis modules keep a few legacy patterns we don't
+# enforce in fresh code.
+"packages/neuro-co-aet/src/neuro_co/aet/analysis/**" = ["RUF"]
+"packages/neuro-co-aet/src/neuro_co/aet/energy/**" = ["B905", "RUF002", "SIM105"]
+# jaxtyping shape strings (e.g. `Float[Tensor, "b a"]`) trigger F722/F821
+# because ruff parses them as PEP 484 forward references.
+"packages/neuro-co-core/**" = ["F722", "F821"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["neuro_co"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+include = ["packages"]
+exclude = ["old/", "**/__pycache__", ".venv/", "**/.venv/"]
+reportMissingImports = "warning"
+reportMissingTypeStubs = false
+
+[[tool.pyright.executionEnvironments]]
+# matplotlib's `Axes.figure` is typed as `Figure | SubFigure`; SubFigure
+# lacks `tight_layout` / `savefig` in stubs even though both work at
+# runtime. Suppress for the viz/report/probes files that drive figures.
+root = "packages/neuro-co-xai/src/neuro_co/xai"
+reportAttributeAccessIssue = "none"
+reportArgumentType = "none"
+
+[tool.pytest.ini_options]
+testpaths = ["packages"]
+addopts = "-ra -q --strict-markers --import-mode=importlib"
+markers = [
+  "slow: long-running tests",
+  "gpu: requires CUDA",
+  "integration: cross-package integration tests",
+]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]

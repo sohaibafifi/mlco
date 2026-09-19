@@ -1,0 +1,35 @@
+# Smoke experiment - one problem, one seed, fast settings.
+# Sanity-check that `neuroco run-experiment` runs end-to-end on a
+# fresh checkout. Real paper experiments declare their own YAMLs
+# under this directory; budget audit them before submitting.
+name: smoke
+description: |
+  Single-seed VRPTW run, ~1 minute on CPU. Used by CI + as a template.
+
+parallel: 1
+
+problems:
+  vrptw:
+    seeds: [0]
+    train:
+      overrides:
+        - "trainer.max_epochs=1"
+        - "model.train_data_size=256"
+        - "model.batch_size=32"
+        - "energy.backend=tdp"
+    baseline:
+      overrides:
+        - "baseline.num_problems=4"
+        - "baseline.max_runtime_s=1.0"
+        - "energy.backend=tdp"
+    eval:
+      overrides:
+        - "energy.backend=tdp"
+    explain:
+      methods: [gradient, contrastive]
+      overrides:
+        - "xai.num_instances=4"
+        - "xai.run_sufficiency=true"
+        - "xai.run_encoder_probes=true"
+    probe:
+      args: ["--num-instances", "4", "--epochs", "30", "--pca-components", "5"]

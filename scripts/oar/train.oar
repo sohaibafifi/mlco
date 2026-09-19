@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+#
+# train.oar: OAR array job: train one (problem, seed) policy per task.
+#
+# 12 tasks = 4 core problems x 3 seeds (cvrptw, op, pdp, fjsp).
+# Each task requests 1 GPU + 48-hour walltime; `besteffort` + `idempotent`
+# survive preemption. Output ckpts land in
+# `outputs/<problem>/train_seed<S>/best.pt` (+ latest.pt + metrics.json),
+# consumed downstream by `eval.oar`.
+#
+# Edit the per-problem `OV` flags below to change train budgets. The CLI
+# is `neuroco train` (argparse): plain flags, no config framework.
+#
+# Submit:  oarsub -S ./train.oar
+# Single:  oarsub -S "./train.oar --array 1"   (just task 1)
+
+#OAR -n Train-CP
+#OAR -l nodes=1/gpu=1,walltime=48
+#OAR -p host="orval39" OR host="orval42" OR host="orval41" OR host="orval40"
+
+#OAR -O logs/output.%jobid%.out
+#OAR -E logs/output.%jobid%.err
+#OAR -t idempotent
+#OAR -t besteffort
+#OAR --array 12
+
+set -eo pipefail
+
+mkdir -p logs
+
+. /nfs/opt/env/env.sh
+module load conda
+module load cuda
+module load nvhpc/24.7-cuda12.5
+conda activate torch-2.7
+echo "========== GPU DEBUG =========="
+echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+echo "OAR assigned GPUs:"
+nvidia-smi --query-gpu=index,name --format=csv,noheader
+python - <<'PY'
+import os
+import torch
+
+print("torch.cuda.is_available() =", torch.cuda.is_available())
+print("torch.cuda.device_count() =", torch.cuda.device_count())
+
+for i in range(torch.cuda.device_count()):
+    print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
+
+print("CUDA_VISIBLE_DEVICES =", os.environ.get("CUDA_VISIBLE_DEVICES"))
+PY
+
+echo "==============================="
+
+PROBLEMS=(cvrptw cvrptw cvrptw op op op pdp pdp pdp fjsp fjsp fjsp)
+SEEDS=(0 1 2 0 1 2 0 1 2 0 1 2)
+
+IDX=$((OAR_ARRAY_INDEX - 1))
+P=${PROBLEMS[$IDX]}
+S=${SEEDS[$IDX]}
+
+# Per-problem training budgets as `neuroco train` flags. CVRPTW and FJSP use POMO
+# (multi-start); OP and PDP use REINFORCE. Tune --epochs / --batch-size / --lr.
+case $P in
+  cvrptw) OV="--algo pomo --epochs 100 --batch-size 256 --lr 1e-4" ;;
+  op)     OV="--algo reinforce --epochs 30 --batch-size 256" ;;
+  pdp)    OV="--algo reinforce --epochs 30 --batch-size 256" ;;
+  fjsp)   OV="--algo pomo --epochs 100 --batch-size 64 --lr 1e-4 --size 10" ;;
+esac
+
+echo "[OAR $OAR_JOB_ID idx=$IDX] $P seed=$S"
+"${UV_BIN:-uv}" run --frozen neuroco train --problem "$P" --seed "$S" $OV \
+    --device cuda --out-dir "outputs/$P/train_seed$S"

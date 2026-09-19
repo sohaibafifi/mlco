@@ -1,0 +1,26 @@
+site_name: MLCO
+site_description: Neural combinatorial optimization tools
+site_url: https://sohaibafifi.github.io/mlco
+repo_url: https://github.com/sohaibafifi/mlco
+repo_name: sohaibafifi/mlco
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+
+plugins:
+  - search
+
+markdown_extensions:
+  - fenced_code
+  - tables
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Training: training.md
+  - Energy accounting: aet.md
+  - Scaling: scale.md
+  - Development: development.md

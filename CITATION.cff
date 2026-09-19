@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+title: "MLCO: Neural combinatorial optimization tools"
+message: "If you use this software, please cite this repository and the version used."
+type: software
+authors:
+  - family-names: Afifi
+    given-names: Sohaib
+    email: sohaib.lafifi@univ-artois.fr
+repository-code: "https://github.com/sohaibafifi/mlco"
+url: "https://github.com/sohaibafifi/mlco"
+abstract: >-
+  Python packages for neural combinatorial optimization, including routing and
+  scheduling policies, energy accountin and explanation methods.
+keywords:
+  - combinatorial-optimization
+  - vehicle-routing
+  - reinforcement-learning
+  - explainable-ai
+  - energy-accounting
+license: MIT
+version: 0.2.0
