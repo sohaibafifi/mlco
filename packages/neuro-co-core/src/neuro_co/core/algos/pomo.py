@@ -7,7 +7,7 @@ first customer). Group-mean baseline; no separate baseline network.
 """
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 import torch
 from jaxtyping import Float, Int
@@ -80,10 +80,10 @@ class POMO(EvalSupport, nn.Module):
         )
         self._step = 0
 
-    def train_step(self, rng: torch.Generator) -> dict[str, float]:
+    def train_step(self, rng: torch.Generator, *, state: State | None = None) -> dict[str, float]:
         self.model.train()
         with self.precision.autocast():
-            reward, sum_logp = self._pomo_rollout(rng=rng, sample_actions=True)
+            reward, sum_logp = self._pomo_rollout(rng=rng, sample_actions=True, state=state)
             adv = pomo_advantage(reward, self.cfg.n_starts).detach()
             loss = -(adv * sum_logp).mean()
 
@@ -130,12 +130,17 @@ class POMO(EvalSupport, nn.Module):
         self,
         rng: torch.Generator,
         sample_actions: bool,
+        *,
+        state: State | None = None,
     ) -> tuple[Float[Tensor, "bn"], Float[Tensor, "bn"]]:
-        b = self.cfg.batch_size
         n_starts = self.cfg.n_starts
-        state = self.env.reset(b, generator=rng, device=self.device)
+        if state is None:
+            state = cast(
+                State, self.env.reset(self.cfg.batch_size, generator=rng, device=self.device)
+            )
 
         feats = self.env.build_features(state)
+        b = feats.shape[0]
         node_embs, graph_emb = self.model.encode(feats)
         node_embs = node_embs.repeat_interleave(n_starts, dim=0)
         graph_emb = graph_emb.repeat_interleave(n_starts, dim=0)

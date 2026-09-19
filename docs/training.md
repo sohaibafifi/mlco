@@ -1,81 +1,85 @@
 # Training
 
-## PyTorch
+## Torch and JAX
 
-`neuroco train` uses models and algorithms from `neuro-co-core` and concrete
-environments from `neuro-co-problems`. Install both packages. The registered
-Torch problems are `tsp`, `atsp`, `cvrp`, `cvrptw`, `op`, `pdp`, `mtsp`, and `fjsp`.
-Algorithms are `reinforce`, `pomo`, and `ppo`; backbones are `am`, `gnn`, `matnet`,
-and `mamba`. The `gnn` backbone requires the core `gnn` extra. Backbone
-compatibility depends on the problem representation.
-
-```bash
-uv run --no-sync neuroco train --problem tsp --algo pomo --size 20 \
-  --epochs 1 --steps-per-epoch 2 --batch-size 8 --device cpu \
-  --out-dir outputs/tsp
-uv run --no-sync neuroco eval --problem tsp --algo pomo --size 20 \
-  --ckpt-path outputs/tsp/best.pt --device cpu
-```
-
-Evaluation restores architecture metadata from the checkpoint. Pass the same
-problem, size, and algorithm as training. The CLI checkpoints contain model
-weights and architecture metadata; they do not contain an optimizer state for
-resuming training.
-
-`scripts/run_all.sh` reports stage and problem completion, percentages, and
-elapsed time. Training reports epoch and step progress with an estimated remaining
-time, including a message before validation. Progress goes to stderr, while
-evaluation metrics remain on stdout.
-
-## Mamba
-
-Install the core `mamba` extra, then select the backbone:
-
-```bash
-uv sync --all-packages --extra mamba
-uv run --no-sync neuroco train --problem tsp --backbone mamba --size 20 \
-  --epochs 1 --steps-per-epoch 2 --batch-size 8 \
-  --hidden-dim 32 --num-layers 1 --device cpu --out-dir outputs/mamba
-```
-
-`MambaModel` and `SSMEncoder` are available from `neuro_co.core.models`.
-The `mamba-cuda` and `mamba-macos` extras provide native implementations.
-Automatic selection depends on the available device and installed backend.
-
-## JAX
-
-The JAX runner trains an attention model with POMO on CVRP or TSP. Install
-`neuro-co-core` and `neuro-co-problems[jax]`, then run a small CPU-compatible
-configuration:
+Use one command and one set of parameters for both backends:
 
 ```bash
 uv sync --all-packages --extra jax
-uv run --no-sync python scripts/train_jax.py --problem cvrp \
-  --steps 2 --size 6 --batch-size 2 --n-starts 3 \
-  --hidden-dim 16 --num-layers 1 --num-heads 2 --precision fp32 \
-  --output outputs/jax-cvrp
+bash scripts/run_all.sh
 ```
 
-JAX environments live in `neuro_co.problems.tsp.jax_env` and
-`neuro_co.problems.cvrp.jax_env`. The shared registry selects them with
-`make_env("cvrp", backend="jax", size=20)`. JAX models, POMO, and training remain
-in `neuro_co.core.jax_backend`.
+Defaults: TSP and CVRP, size 20, AM with 128 hidden units, 3 layers and 8 heads,
+POMO, 10 epochs of 100 updates, batch size 128, Adam at `1e-4`, weight decay
+`1e-6`, gradient clipping at 1, fp32, seed 42, and CPU. POMO uses up to 20 valid
+starts. CVRP capacity is 50 and customer demands range from 1 to 9.
 
-The module entry point accepts the same arguments:
-`python -m neuro_co.core.jax_backend.train`.
-The runner writes `config.json`, `metrics.jsonl`, and `checkpoint.npz` under
-`--output`. Checkpoints include parameters, optimizer state, and the random key.
-Resume by passing the checkpoint and a larger total step target:
+Both backends use identical initial weights and freshly generated training
+batches. Validation and test sets each contain 512 identical instances across
+backends, with separate seeds and streams. Each epoch validates on the same set;
+the best checkpoint is evaluated greedily on the separate test set. Framework
+random samplers differ, so sampled actions and learned weights need not match.
+
+Set parameters once to apply them to both backends:
 
 ```bash
-uv run --no-sync python scripts/train_jax.py --problem cvrp \
-  --steps 4 --size 6 --batch-size 2 --n-starts 3 \
-  --hidden-dim 16 --num-layers 1 --num-heads 2 --precision fp32 \
-  --output outputs/jax-cvrp --resume outputs/jax-cvrp/checkpoint.npz
+EPOCHS=10 STEPS=100 BATCH=128 SIZE=20 N_STARTS=19 \
+  HIDDEN_DIM=128 NUM_LAYERS=3 NUM_HEADS=8 DEVICE=cpu \
+  OUT_ROOT=outputs/comparison-1 bash scripts/run_all.sh
 ```
 
-JAX checkpoints are separate from PyTorch checkpoints. The JAX backend does not
-provide the PyTorch Mamba, MatNet, explanation, or scheduling workflows.
+`STEPS` means updates per epoch. Other options include `EVAL_BATCH`, `LR`,
+`SEED`, `EVAL_SEED`, `TEST_SEED`, `CAPACITY`, `MAX_DEMAND`, `OPTIMIZER`,
+`WEIGHT_DECAY`, and `GRAD_CLIP`. Use `DEVICE=cuda` only when both frameworks have
+CUDA support. `BACKENDS=torch` or `BACKENDS=jax` selects a single backend.
+
+Runs go to `outputs/matched/<backend>/<problem>` by default. Existing runs are
+preserved; choose a new `OUT_ROOT` when retraining. Progress shows steps, elapsed
+time, and training ETA on stderr. Each run saves its configuration, checkpoints,
+metrics, test costs, data hashes, and timings. `comparison.csv` and
+`comparison.json` collect the results and indicate whether settings and hardware
+match. Training time includes the first JAX compilation; warm update time excludes
+the first update. Validation and test inference are timed separately. Standalone
+evaluation measures a first call and a warm call in a fresh process.
+
+Reevaluate selected checkpoints without training:
+
+```bash
+SKIP_TRAIN=1 OUT_ROOT=outputs/comparison-1 bash scripts/run_all.sh
+```
+
+For a single run, change only `--backend`:
+
+```bash
+uv run --no-sync neuroco train --backend torch --problem tsp --out-dir outputs/tsp-torch
+uv run --no-sync neuroco train --backend jax --problem tsp --out-dir outputs/tsp-jax
+```
+
+`scripts/train_jax.py` delegates to the same CLI and accepts the same training
+parameters. Its legacy `--steps N` alias means one epoch of N updates. Legacy
+native JAX runs remain available through `python -m neuro_co.core.jax_backend.train`;
+they use the older protocol and should not be mixed into this comparison.
+
+## Other Torch problems and models
+
+Torch also supports `atsp`, `cvrptw`, `op`, `pdp`, `mtsp`, and `fjsp`:
+
+```bash
+BACKENDS=torch PROBLEMS="tsp atsp cvrp cvrptw op pdp mtsp fjsp" \
+  OUT_ROOT=outputs/torch-problems bash scripts/run_all.sh
+```
+
+`FJSP_SIZE` sets the number of jobs, default 10. The Torch CLI also accepts
+`--algo reinforce|ppo` and `--backbone gnn|matnet|mamba`; these have no matching
+JAX training path. Backbone compatibility depends on the problem representation.
+Install the core `gnn` or `mamba` extra before using those models.
+
+```bash
+uv sync --all-packages --extra mamba
+uv run --no-sync neuroco train --problem tsp --backbone mamba --algo reinforce \
+  --epochs 1 --steps-per-epoch 2 --batch-size 8 --size 20 \
+  --hidden-dim 32 --num-layers 1 --device cpu --out-dir outputs/mamba
+```
 
 ## Exporting solutions
 

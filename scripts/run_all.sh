@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Train and evaluate registered problems using outputs/<problem>/ run directories.
+# Train Torch and JAX with one configuration, then evaluate their checkpoints.
 # Usage:
-#   PROBLEMS="cvrptw fjsp" bash scripts/run_all.sh
+#   BACKENDS=torch PROBLEMS="cvrptw fjsp" bash scripts/run_all.sh
 #   EPOCHS=1 STEPS=2 BATCH=8 DEVICE=cpu bash scripts/run_all.sh
 #   SKIP_TRAIN=1 bash scripts/run_all.sh
 # Training options: ALGO BACKBONE EPOCHS STEPS BATCH SIZE FJSP_SIZE DEVICE OUT_ROOT.
@@ -9,7 +9,11 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/progress.sh"
-PROBLEMS="${PROBLEMS:-cvrptw op pdp fjsp}"
+cd "$HERE/.."
+PROBLEMS="${PROBLEMS:-tsp cvrp}"
+export BACKENDS="${BACKENDS:-torch jax}"
+export OUT_ROOT="${OUT_ROOT:-outputs/matched}"
+export DEVICE="${DEVICE:-cpu}"
 IFS=' ' read -ra problem_names <<< "$PROBLEMS"
 problem_count=${#problem_names[@]}
 if [ "$problem_count" -eq 0 ]; then
@@ -41,5 +45,19 @@ fi
 stage='evaluation'
 mlco_progress run_all "$completed" "$stages" "evaluating checkpoints for $problem_count problems"
 bash "$HERE/run_local_eval.sh" "${problem_names[@]}"
+shared_runs=0
+for problem in "${problem_names[@]}"; do
+  for backend in $BACKENDS; do
+    if [ -f "$OUT_ROOT/$backend/$problem/config.json" ]; then shared_runs=1; fi
+  done
+done
+if [ "$shared_runs" -eq 1 ]; then
+  "${UV_BIN:-uv}" run --no-sync python - "$OUT_ROOT" "$PROBLEMS" "$BACKENDS" <<'PY_SUMMARY'
+import sys
+from pathlib import Path
+from neuro_co.cli.training import summarize
+summarize(Path(sys.argv[1]), sys.argv[2].split(), sys.argv[3].split())
+PY_SUMMARY
+fi
 completed=$((completed + 1))
 mlco_progress run_all "$completed" "$stages" 'finished'
