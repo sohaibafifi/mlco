@@ -6,12 +6,14 @@ city 0, varying second-visited city) and CVRP (depot fixed, varying
 first customer). Group-mean baseline; no separate baseline network.
 """
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Literal, cast
 
 import torch
 from jaxtyping import Float, Int
 from torch import Tensor, nn
+from torch.utils import _pytree as pytree
 
 from ..augment import augment_state, best_over_aug
 from ..decode import log_prob
@@ -40,6 +42,7 @@ class POMOConfig:
     lr_warmup_steps: int = 0
     lr_total_steps: int = 0  # > 0 enables cosine decay
     eval_seed: int = 12_345  # fixed held-out eval instances
+    microbatch_size: int | None = None  # instances per backward pass; None = full batch
 
 
 class POMO(EvalSupport, nn.Module):
@@ -56,6 +59,10 @@ class POMO(EvalSupport, nn.Module):
         self.model = model.to(device)
         self.env = env
         self.cfg = cfg
+        if cfg.microbatch_size is not None and (
+            type(cfg.microbatch_size) is not int or cfg.microbatch_size <= 0
+        ):
+            raise ValueError("microbatch_size must be a positive integer or None")
         self.device = torch.device(device)
         if cfg.optimizer == "adamw":
             self.opt = torch.optim.AdamW(
@@ -82,13 +89,28 @@ class POMO(EvalSupport, nn.Module):
 
     def train_step(self, rng: torch.Generator, *, state: State | None = None) -> dict[str, float]:
         self.model.train()
-        with self.precision.autocast():
-            reward, sum_logp = self._pomo_rollout(rng=rng, sample_actions=True, state=state)
-            adv = pomo_advantage(reward, self.cfg.n_starts).detach()
-            loss = -(adv * sum_logp).mean()
-
         self.opt.zero_grad(set_to_none=True)
-        self.precision.backward(loss)
+        totals = torch.zeros(5, device=self.device)
+        for current, weight in self._training_batches(rng, state):
+            with self.precision.autocast():
+                reward, sum_logp = self._pomo_rollout(rng=rng, sample_actions=True, state=current)
+                adv = pomo_advantage(reward, self.cfg.n_starts).detach()
+                loss = -(adv * sum_logp).mean()
+            self.precision.backward(loss * weight)
+            totals += (
+                weight
+                * torch.stack(
+                    (
+                        loss.detach(),
+                        reward.mean(),
+                        reward.view(-1, self.cfg.n_starts).max(dim=1).values.mean(),
+                        adv.mean(),
+                        adv.square().mean(),
+                    )
+                ).detach()
+            )
+            del reward, sum_logp, adv, loss
+
         if self.cfg.grad_clip > 0:
             self.precision.unscale_(self.opt)
             nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.grad_clip)
@@ -102,18 +124,36 @@ class POMO(EvalSupport, nn.Module):
 
         self._step += 1
         return {
-            "loss": loss.detach().item(),
-            "reward_mean": reward.mean().item(),
-            "reward_max_per_group": reward.view(-1, self.cfg.n_starts)
-            .max(dim=1)
-            .values.mean()
-            .item(),
-            "advantage_std": adv.std(unbiased=False).item(),
+            "loss": totals[0].item(),
+            "reward_mean": totals[1].item(),
+            "reward_max_per_group": totals[2].item(),
+            "advantage_std": (totals[4] - totals[3].square()).clamp_min(0).sqrt().item(),
         }
 
+    def _training_batches(
+        self, rng: torch.Generator, state: State | None
+    ) -> Iterator[tuple[State | None, float]]:
+        batch = self.cfg.batch_size if state is None else self.env.build_features(state).shape[0]
+        if batch <= 0:
+            raise ValueError("training batch must contain at least one instance")
+        microbatch = self.cfg.microbatch_size
+        if microbatch is None or microbatch >= batch:
+            yield state, 1.0
+            return
+        if state is None:
+            state = cast(State, self.env.reset(batch, generator=rng, device=self.device))
+        for start in range(0, batch, microbatch):
+            end = min(start + microbatch, batch)
+            chunk = pytree.tree_map(
+                lambda x, start=start, end=end: (
+                    x[start:end] if isinstance(x, Tensor) and x.ndim else x
+                ),
+                state,
+            )
+            yield chunk, (end - start) / batch
+
     def eval_step(self, rng: torch.Generator) -> dict[str, float]:
-        """Greedy eval on a fixed held-out set. `cfg.eval_augment=8` runs
-        dihedral x8 augmentation and keeps the best tour per instance."""
+        """Greedy eval with optional nested dihedral instance augmentation."""
         self.model.eval()
         n_aug = self.cfg.eval_augment
         b = self.cfg.eval_batch_size
