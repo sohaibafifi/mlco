@@ -29,6 +29,32 @@ class WeightEMA:
         }
         self._backup: dict[str, torch.Tensor] | None = None
 
+    def state_dict(self) -> dict:
+        return {
+            "decay": self.decay,
+            "shadow": {n: p.detach().cpu().clone() for n, p in self.shadow.items()},
+        }
+
+    def validate_state_dict(self, state: dict) -> None:
+        saved = state.get("shadow", {})
+        if state.get("decay") != self.decay or set(saved) != set(self.shadow):
+            raise ValueError("checkpoint EMA configuration differs")
+        if any(
+            not isinstance(saved[n], torch.Tensor)
+            or saved[n].shape != p.shape
+            or saved[n].dtype != p.dtype
+            for n, p in self.shadow.items()
+        ):
+            raise ValueError("checkpoint EMA parameter shape or dtype differs")
+
+    @torch.no_grad()
+    def load_state_dict(self, state: dict) -> None:
+        self.validate_state_dict(state)
+        if self._backup is not None:
+            raise ValueError("cannot restore EMA while evaluation weights are applied")
+        for name, value in state["shadow"].items():
+            self.shadow[name].copy_(value)
+
     @torch.no_grad()
     def update(self) -> None:
         for n, p in self.model.named_parameters():

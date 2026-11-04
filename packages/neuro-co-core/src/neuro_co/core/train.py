@@ -9,11 +9,20 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import torch
 
 from .algo import Algo
+from .checkpoint import (
+    atomic_save,
+    capture_rng_state,
+    restore_rng_state,
+    restore_training_state,
+    training_state,
+    validate_rng_state,
+    validate_training_state,
+)
 
 
 @dataclass(slots=True)
@@ -70,12 +79,14 @@ class Trainer:
         self.hooks = hooks or TrainHooks()
         self.best_metric_key = best_metric_key
         self.state = TrainState()
-        self.rng = torch.Generator(device=self.device).manual_seed(seed)
+        generator_device = self.device if self.device.type == "cuda" else torch.device("cpu")
+        self.rng = torch.Generator(device=generator_device).manual_seed(seed)
         if resume_from is not None:
             self.load(resume_from)
 
     def fit(self) -> TrainState:
-        for _ in range(self.steps):
+        remaining = max(0, self.steps - self.state.step)
+        for _ in range(remaining):
             metrics = self.algo.train_step(self.rng)
             self.state.step += 1
             if self.hooks.on_step_end is not None:
@@ -87,7 +98,7 @@ class Trainer:
                     self.ckpt_dir / f"step_{self.state.step:08d}.pt" if self.ckpt_dir else None
                 )
         # Always persist the final state as latest.pt.
-        if self.ckpt_dir is not None and self.steps > 0:
+        if self.ckpt_dir is not None and remaining > 0:
             self._save_ckpt(self.ckpt_dir / "latest.pt")
         return self.state
 
@@ -123,29 +134,71 @@ class Trainer:
             ctx = cast(AbstractContextManager, ew())
         with ctx:
             payload = {
+                "checkpoint_version": 1,
+                "resume_training": not (
+                    eval_weights and callable(ew) and getattr(self.algo, "ema", None) is not None
+                ),
+                "training_state": training_state(self.algo),
+                "global_rng_state": capture_rng_state(self.device),
                 "step": self.state.step,
                 "epoch": self.state.epoch,
                 "best_metric": self.state.best_metric,
                 "algo_state": _maybe_state_dict(self.algo),
-                "rng_state": self.rng.get_state(),
+                "rng_state": self.rng.get_state().cpu(),
             }
-            torch.save(payload, path)
-            if mirror_latest:
-                torch.save(payload, self.ckpt_dir / "latest.pt")
+            atomic_save(payload, path)
+            if mirror_latest and path != self.ckpt_dir / "latest.pt":
+                atomic_save(payload, self.ckpt_dir / "latest.pt")
 
     def load(self, path: Path | str) -> None:
-        """Restore step, best metric, algo weights/optimizer, and RNG state."""
-        payload = torch.load(Path(path), map_location=self.device, weights_only=False)
-        self.state.step = int(payload.get("step", 0))
-        self.state.epoch = int(payload.get("epoch", 0))
-        self.state.best_metric = float(payload.get("best_metric", float("-inf")))
+        """Restore a training checkpoint; legacy checkpoints keep their saved subset."""
+        payload = torch.load(Path(path), map_location="cpu", weights_only=True)
+        version = payload.get("checkpoint_version")
+        if version not in (None, 1):
+            raise ValueError("unsupported trainer checkpoint version")
+        if payload.get("resume_training") is False:
+            raise ValueError("EMA evaluation checkpoint cannot resume training; use latest.pt")
         algo_state = payload.get("algo_state")
+        if version == 1:
+            validate_training_state(self.algo, payload["training_state"])
+            validate_rng_state(payload["global_rng_state"], self.device)
+            _validate_algo_state(self.algo, algo_state)
+        rng_state = payload.get("rng_state")
+        if rng_state is not None:
+            torch.Generator(device=self.rng.device).set_state(rng_state.cpu())
+        state = TrainState(
+            step=int(payload.get("step", 0)),
+            epoch=int(payload.get("epoch", 0)),
+            best_metric=float(payload.get("best_metric", float("-inf"))),
+        )
+        if state.step < 0 or state.epoch < 0:
+            raise ValueError("checkpoint progress must be nonnegative")
         load_fn = getattr(self.algo, "load_state_dict", None)
         if algo_state is not None and callable(load_fn):
             load_fn(algo_state)
-        rng_state = payload.get("rng_state")
+        if version == 1:
+            restore_training_state(self.algo, payload["training_state"])
+            restore_rng_state(payload["global_rng_state"], self.device)
+        elif hasattr(self.algo, "_step"):
+            cast(Any, self.algo)._step = state.step
         if rng_state is not None:
-            self.rng.set_state(rng_state)
+            self.rng.set_state(rng_state.cpu())
+        self.state = state
+
+
+def _validate_algo_state(algo: object, saved: dict | None) -> None:
+    current = _maybe_state_dict(algo)
+    if current is None and saved is None:
+        return
+    if not isinstance(saved, dict) or current is None or set(current) != set(saved):
+        raise ValueError("checkpoint model state keys differ")
+    for key, value in current.items():
+        if isinstance(value, torch.Tensor) and (
+            not isinstance(saved[key], torch.Tensor)
+            or value.shape != saved[key].shape
+            or value.dtype != saved[key].dtype
+        ):
+            raise ValueError(f"checkpoint model shape or dtype differs: {key}")
 
 
 def _maybe_state_dict(obj: object) -> dict | None:

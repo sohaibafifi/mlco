@@ -9,6 +9,15 @@ import numpy as np
 import torch
 
 from neuro_co.core.algos.pomo import POMO, POMOConfig
+from neuro_co.core.checkpoint import (
+    atomic_save,
+    capture_rng_state,
+    restore_rng_state,
+    restore_training_state,
+    training_state,
+    validate_rng_state,
+    validate_training_state,
+)
 from neuro_co.core.env import Env, get_dynamic_decoder_context
 from neuro_co.core.models import AttentionModel
 from neuro_co.core.state import State
@@ -148,7 +157,7 @@ class TorchTrainer:
         return costs
 
     def save(self, path: Path, step: int) -> None:
-        torch.save(
+        atomic_save(
             {
                 "model": self.model.state_dict(),
                 "arch": {
@@ -159,19 +168,33 @@ class TorchTrainer:
                 },
                 "epoch": max(0, (step - 1) // self.config.steps_per_epoch),
                 "step": step,
-                "optimizer": self.algo.opt.state_dict(),
-                "sampler_state": self.rng.get_state(),
+                "training_state": training_state(self.algo),
+                "global_rng_state": capture_rng_state(self.device),
+                "sampler_state": self.rng.get_state().cpu(),
             },
             path,
         )
 
-    def load(self, path: Path) -> int:
-        checkpoint = torch.load(path, map_location=self.device, weights_only=True)
+    def load(self, path: Path, *, resume: bool = True) -> int:
+        """Load on CPU first; inference can skip training and RNG restoration."""
+        checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+        state = checkpoint.get("training_state")
+        rng = checkpoint.get("global_rng_state")
+        if resume:
+            if state is not None:
+                validate_training_state(self.algo, state)
+            if rng is not None:
+                validate_rng_state(rng, self.device)
         self.model.load_state_dict(checkpoint["model"])
-        if "optimizer" in checkpoint:
-            self.algo.opt.load_state_dict(checkpoint["optimizer"])
-        if "sampler_state" in checkpoint:
-            self.rng.set_state(checkpoint["sampler_state"].cpu())
+        if resume:
+            if state is not None:
+                restore_training_state(self.algo, state)
+            elif "optimizer" in checkpoint:
+                self.algo.opt.load_state_dict(checkpoint["optimizer"])
+            if "sampler_state" in checkpoint:
+                self.rng.set_state(checkpoint["sampler_state"].cpu())
+            if rng is not None:
+                restore_rng_state(rng, self.device)
         self.algo._step = checkpoint.get("step", 0)
         return int(self.algo._step)
 

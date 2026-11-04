@@ -43,6 +43,29 @@ class Precision:
             torch.amp.GradScaler(device) if precision == "fp16" else None
         )
 
+    def state_dict(self) -> dict:
+        return {
+            "precision": self.precision,
+            "device": self.device,
+            "scaler": self._scaler.state_dict() if self._scaler is not None else None,
+        }
+
+    def validate_state_dict(self, state: dict) -> None:
+        if state.get("precision") != self.precision or state.get("device") != self.device:
+            raise ValueError("checkpoint precision configuration differs")
+        scaler = state.get("scaler")
+        if (scaler is None) != (self._scaler is None):
+            raise ValueError("checkpoint gradient scaler differs")
+        if self._scaler is not None and (
+            not isinstance(scaler, dict) or set(scaler) != set(self._scaler.state_dict())
+        ):
+            raise ValueError("checkpoint gradient scaler state is invalid")
+
+    def load_state_dict(self, state: dict) -> None:
+        self.validate_state_dict(state)
+        if self._scaler is not None:
+            self._scaler.load_state_dict(state["scaler"])
+
     @property
     def enabled(self) -> bool:
         return self._dtype is not None

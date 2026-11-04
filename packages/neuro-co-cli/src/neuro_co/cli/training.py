@@ -312,7 +312,11 @@ def evaluate_saved_run(checkpoint: Path, device: str = "cpu") -> dict:
     saved = json.loads((checkpoint.parent / "config.json").read_text())
     config = TrainingConfig(**saved["training"])
     trainer = make_trainer(config, saved["backend"], device, initial_weights(config))
-    step = trainer.load(checkpoint)
+    step = (
+        trainer.load(checkpoint, resume=False)
+        if saved["backend"] == "torch"
+        else trainer.load(checkpoint)
+    )
     data = batch(config, "test")
     costs, first_s = _evaluate(trainer, data)
     _, warm_s = _evaluate(trainer, data)

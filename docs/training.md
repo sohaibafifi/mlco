@@ -90,3 +90,26 @@ Both accept an initially unfinished environment state and return integer arrays
 with shape `(batch, steps)`. Completed rows use `-1` padding; Torch trims trailing
 columns once the batch finishes. Add the initial city when exporting a TSP tour.
 CVRP actions include depot returns, so split the sequence at each return.
+
+## Resuming Torch training
+
+The core `Trainer` interprets `steps` as the total target, including steps already
+saved in `resume_from`. A checkpoint at step 40 resumed with `steps=100` runs 60
+updates; a completed target performs no further work. Checkpoints are replaced
+atomically, so a failed write leaves the previous checkpoint intact.
+
+`latest.pt` and periodic checkpoints preserve model weights, optimizer,
+scheduler, gradient scaler, EMA, algorithm step, the sampling generator, and
+Python, NumPy, Torch CPU and selected accelerator RNG states. Resume requires
+compatible training configuration and the same selected device. Loading legacy
+checkpoints preserves the subset they originally saved; missing history cannot
+be reconstructed. EMA `best.pt` files contain evaluation weights and cannot
+resume optimizer-aligned training. Use `latest.pt` for that purpose.
+
+`neuro_co.core.checkpoint` exposes these atomic-save and state helpers for other
+trainers. Load checkpoint tensors on CPU with `weights_only=True` before
+restoring them, and validate training and RNG state before mutating model weights.
+An inference-only loader can omit training and RNG restoration when evaluating
+on another device.
+
+See [POMO options](pomo-options.md) for augmentation and microbatch settings.
