@@ -27,6 +27,10 @@ def dihedral8(coords: Float[Tensor, "b n 2"]) -> Float[Tensor, "b8 n 2"]:
 
     so reshape to `(8, b, n, 2)` recovers the transform axis first.
     """
+    return _dihedral(coords, N_DIHEDRAL)
+
+
+def _dihedral(coords: Tensor, n_aug: int) -> Tensor:
     x = coords[..., 0]
     y = coords[..., 1]
     variants = [
@@ -39,21 +43,22 @@ def dihedral8(coords: Float[Tensor, "b n 2"]) -> Float[Tensor, "b8 n 2"]:
         (1.0 - x, 1.0 - y),
         (1.0 - y, 1.0 - x),
     ]
-    stacked = torch.stack([torch.stack([a, b], dim=-1) for a, b in variants], dim=0)  # (8,b,n,2)
-    return stacked.reshape(N_DIHEDRAL * coords.shape[0], *coords.shape[1:])
+    stacked = torch.stack([torch.stack([a, b], dim=-1) for a, b in variants[:n_aug]], dim=0)
+    return stacked.reshape(n_aug * coords.shape[0], *coords.shape[1:])
 
 
 def augment_state(state: State, n_aug: int) -> State:
     """Replicate `state` `n_aug` times (aug-major) with dihedral-transformed
     coords. Non-coord fields are tiled unchanged.
 
-    `n_aug` must be 1 (no-op) or 8. State must expose a `coords` field of
-    shape `(b, n, 2)`: true for TSP/CVRP/CVRPTW.
+    `n_aug` must be 1 (no-op), 2, 4, or 8. Subsets use the first transforms
+    in :func:`dihedral8`, so candidate sets are nested. State must expose
+    a `coords` field of shape `(b, n, 2)`.
     """
     if n_aug == 1:
         return state
-    if n_aug != N_DIHEDRAL:
-        raise ValueError(f"n_aug must be 1 or {N_DIHEDRAL}, got {n_aug}")
+    if n_aug not in (2, 4, N_DIHEDRAL):
+        raise ValueError(f"n_aug must be 1, 2, 4, or {N_DIHEDRAL}, got {n_aug}")
     coords = getattr(state, "coords", None)
     if coords is None:
         raise AttributeError("augment_state requires a `coords` field on the state")
@@ -65,7 +70,7 @@ def augment_state(state: State, n_aug: int) -> State:
         return t.repeat(n_aug, *([1] * (t.dim() - 1)))
 
     tiled = pytree.tree_map(_tile, state)
-    return tiled.replace(coords=dihedral8(coords))
+    return tiled.replace(coords=_dihedral(coords, n_aug))
 
 
 def best_over_aug(reward: Float[Tensor, "b8"], n_aug: int, batch: int) -> Float[Tensor, "b"]:

@@ -32,7 +32,7 @@ class REINFORCEConfig:
     weight_decay: float = 0.01
     eval_batch_size: int = 512
     precision: PrecisionType = "fp32"
-    eval_augment: int = 1  # 1 = none, 8 = dihedral x8 instance augmentation
+    eval_augment: int = 1  # 1 = none; 2, 4, or 8 nested dihedral transforms
     ema_decay: float = 0.0
     lr_warmup_steps: int = 0
     lr_total_steps: int = 0

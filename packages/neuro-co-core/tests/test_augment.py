@@ -1,5 +1,6 @@
 """Instance-augmentation tests."""
 
+import pytest
 import torch
 
 from neuro_co.core.algos.pomo import POMO, POMOConfig
@@ -48,6 +49,21 @@ def test_augment_state_noop() -> None:
     assert augment_state(s, 1) is s
 
 
+@pytest.mark.parametrize("n_aug", [2, 4, 8])
+def test_augment_state_nested_subsets(n_aug: int) -> None:
+    state = TSPEnv(size=6).reset(3)
+    augmented = augment_state(state, n_aug)
+    assert augmented.coords.shape == (n_aug * 3, 6, 2)
+    assert torch.equal(augmented.coords, dihedral8(state.coords)[: n_aug * 3])
+    assert torch.equal(augmented.visited, state.visited.repeat(n_aug, 1))
+
+
+@pytest.mark.parametrize("n_aug", [0, 3, 5, 16])
+def test_augment_state_rejects_unsupported_count(n_aug: int) -> None:
+    with pytest.raises(ValueError, match="n_aug"):
+        augment_state(TSPEnv(size=6).reset(3), n_aug)
+
+
 def test_best_over_aug() -> None:
     # reward aug-major (n_aug=2, batch=3): block0 then block1.
     reward = torch.tensor([1.0, 2.0, 3.0, 5.0, 1.0, 9.0])
@@ -55,14 +71,17 @@ def test_best_over_aug() -> None:
     assert torch.equal(best, torch.tensor([5.0, 2.0, 9.0]))
 
 
-def test_pomo_eval_augment_not_worse() -> None:
-    """x8 augmentation keeps the best -> tour length <= non-augmented."""
+@pytest.mark.parametrize("n_aug", [2, 4, 8])
+def test_pomo_eval_augment_not_worse(n_aug: int) -> None:
+    """Every augmentation subset includes the untransformed instance."""
     env = TSPEnv(size=8)
     model = AttentionModel(in_dim=env.encoder_in_dim, hidden_dim=16, num_layers=1, num_heads=2)
     base = POMO(
         model, env, POMOConfig(batch_size=4, n_starts=3, eval_batch_size=64, eval_augment=1)
     )
-    aug = POMO(model, env, POMOConfig(batch_size=4, n_starts=3, eval_batch_size=64, eval_augment=8))
+    aug = POMO(
+        model, env, POMOConfig(batch_size=4, n_starts=3, eval_batch_size=64, eval_augment=n_aug)
+    )
     # Same weights (aug shares model object).
     rng1 = torch.Generator().manual_seed(7)
     rng2 = torch.Generator().manual_seed(7)
