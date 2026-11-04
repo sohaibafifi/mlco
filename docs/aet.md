@@ -48,6 +48,39 @@ measurement requires a calibrated physical meter implementing `WallMeterSampler`
 The `wall_meter` backend requires an injected sampler, `pue=1.0`,
 `report_embodied=False`, and `allow_fallback=False`.
 
+## Measure a GH200 module
+
+On Linux GH200 hosts exposing Grace hwmon power sensors, use the explicit
+module tracker. It integrates the selected Grace + Hopper module's power in a
+separate process so Python training cannot stall polling by holding the GIL.
+The module is shared by all processes using it; run the measured workload
+exclusively and bind CPU, memory, and GPU work to that module.
+
+```python
+import torch
+from neuro_co.aet.energy import GraceModuleTracker, checked_module_energy
+
+torch.cuda.synchronize(device)
+with GraceModuleTracker("inference", socket=0) as tracker:
+    run_workload()
+    torch.cuda.synchronize(device)
+    tracker.n_items = batch_size
+
+record = checked_module_energy(tracker, socket=0, instances=batch_size)
+```
+
+The record retains monotonic timestamps and power samples. Validation checks
+sensor identity, work count, sampling gaps, and the integral recomputed from
+the trace. The default maximum gap is one second; a failed sensor read leaves
+energy unavailable instead of estimating it. `allow_zero=True` permits an
+observed zero integral for short initialization or restore windows only.
+
+`energy_j` and `energy_module_j` describe the same undecomposed module integral.
+The module includes Grace and Hopper, so do not add CPU rails or NVML energy to
+it. It is neither whole-system AC energy nor a calibrated measurement. Records
+use `aet-grace-module-energy/v1`; they are a separate API from `EnergyReading`
+and are not accepted by `neuroco-aet-report`.
+
 ## Build a report
 
 ```bash
