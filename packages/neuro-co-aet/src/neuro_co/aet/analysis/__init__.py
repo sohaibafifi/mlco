@@ -18,6 +18,7 @@ from neuro_co.aet.analysis.asymptotic import (
     crossover_n,
     energy_curves,
 )
+from neuro_co.aet.analysis.break_even import energy_break_even, paired_aet
 from neuro_co.aet.analysis.cli import write_aet_report
 
 __all__ = [
@@ -27,7 +28,9 @@ __all__ = [
     "asymptotic_ratio",
     "build_aet_table",
     "crossover_n",
+    "energy_break_even",
     "energy_curves",
     "load_records",
+    "paired_aet",
     "write_aet_report",
 ]

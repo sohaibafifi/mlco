@@ -21,3 +21,26 @@ counter diagnostics do not replace calibrated whole-system measurements.
 See [energy accounting](../../docs/aet.md) for backend controls and evidence
 requirements. The optional `experiments` extra installs experiment dependencies;
 `rapl` adds Linux CPU counters and `analysis` adds pandas.
+
+For paired measurements with a declared quality bound, use the library API:
+
+```python
+from neuro_co.aet.analysis import paired_aet
+
+result = paired_aet(
+    neural_j_per_instance=[6.4, 6.6, 6.5],
+    baseline_j_per_instance=[45.0, 46.0, 45.5],
+    training_debt_j=2_000_000,
+    batch_size=64,
+    required_tolerance_pct=3.0,
+    tolerances_pct=[1, 3, 5],
+)
+```
+
+Positions in both arrays must identify matched rounds with compatible energy
+scopes. The result retains the energy-only crossing when the quality gate fails.
+Its bootstrap interval is descriptive and conditional on the supplied training
+debt. With `debt_complete=False`, crossings are lower bounds and AET remains
+unidentified. A saving interval crossing zero also leaves AET unidentified.
+The quality bound must be established independently; this function does not
+verify routes or infer quality from energy measurements.
