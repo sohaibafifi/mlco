@@ -27,6 +27,16 @@ Training writes checkpoints and metrics to `--out-dir`. See
 [training](docs/training.md) for Mamba and JAX, and
 [getting started](docs/getting-started.md) for installation options.
 
+For a complete CPU experiment, including a classical baseline, evaluation,
+explanation, and a report:
+
+```bash
+uv sync --all-packages --extra report
+uv run --no-sync neuroco experiment recipes/smoke.yaml
+```
+
+See [experiments](docs/experiments.md) for isolated campaigns, retries, and results.
+
 ## Packages
 
 | Package | Purpose |

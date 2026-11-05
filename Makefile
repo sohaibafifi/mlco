@@ -2,7 +2,7 @@ UV ?= uv
 PYTHON ?= 3.12
 RUN = $(UV) run --no-sync
 
-.PHONY: setup check lint format typecheck test docs build versions
+.PHONY: setup check lint format typecheck test docs build versions wheel-smoke
 
 setup:
 	$(UV) sync --frozen --all-packages --group dev --python $(PYTHON) \
@@ -33,3 +33,6 @@ docs:
 
 build:
 	$(UV) build --all-packages --out-dir dist
+
+wheel-smoke: build
+	$(RUN) python scripts/smoke_wheels.py --dist-dir dist

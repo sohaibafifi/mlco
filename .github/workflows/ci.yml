@@ -47,3 +47,27 @@ jobs:
         with:
           name: distributions-py${{ matrix.python }}
           path: dist/
+
+  installed-wheels:
+    name: Installed wheels / Python ${{ matrix.python }} / ${{ matrix.profile }}
+    needs: check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+        profile: [minimal, cli, report, full]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions-py${{ matrix.python }}
+          path: dist/
+      - run: uv python install ${{ matrix.python }}
+      - name: Install and exercise wheels outside the checkout
+        run: >-
+          uv run --no-project --python ${{ matrix.python }} python
+          scripts/smoke_wheels.py --dist-dir dist --profile ${{ matrix.profile }}

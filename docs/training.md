@@ -93,6 +93,27 @@ CVRP actions include depot returns, so split the sequence at each return.
 
 ## Resuming Torch training
 
+The CLI accepts `--resume` with a checkpoint path and the same output directory:
+
+```bash
+uv run --no-sync neuroco train --problem tsp --epochs 1 --steps-per-epoch 2 \
+  --batch-size 8 --eval-batch-size 8 --out-dir outputs/tsp
+uv run --no-sync neuroco train --problem tsp --epochs 2 --steps-per-epoch 2 \
+  --batch-size 8 --eval-batch-size 8 --out-dir outputs/tsp \
+  --resume outputs/tsp/latest.pt
+```
+
+Here the new target is four total updates, including the two already saved.
+Training settings, backend, and device must be compatible; the total epoch target
+may increase. History and best-checkpoint selection continue across resumes.
+An existing nonempty output directory requires an explicit resume.
+
+By default, the shared protocol saves an initial checkpoint and a checkpoint
+after each epoch's validation. `--checkpoint-every-steps N` also saves progress
+every N updates. After an interruption, updates after the last durable checkpoint
+are replayed. JAX training remains available, but CLI resume currently requires
+Torch and rejects JAX resume before changing the run.
+
 The core `Trainer` interprets `steps` as the total target, including steps already
 saved in `resume_from`. A checkpoint at step 40 resumed with `steps=100` runs 60
 updates; a completed target performs no further work. Checkpoints are replaced

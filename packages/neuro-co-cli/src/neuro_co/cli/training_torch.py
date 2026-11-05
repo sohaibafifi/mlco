@@ -156,10 +156,11 @@ class TorchTrainer:
             raise RuntimeError("Torch greedy evaluation produced non-finite costs")
         return costs
 
-    def save(self, path: Path, step: int) -> None:
+    def save(self, path: Path, step: int, *, progress: dict | None = None) -> None:
         atomic_save(
             {
                 "model": self.model.state_dict(),
+                "run_state": progress,
                 "arch": {
                     "backbone": "am",
                     "hidden_dim": self.config.hidden_dim,

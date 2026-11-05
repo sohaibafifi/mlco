@@ -124,6 +124,13 @@ def compare_methods(
     import pandas as pd
 
     sub = df[(df["kind"] == kind) & (df["metric"] == metric)]
+    if "status" in sub.columns:
+        sub = sub[sub["status"].isna() | sub["status"].eq("complete")]
+    if sub.duplicated(["problem", "method", "seed"]).any():
+        raise ValueError(
+            "Multiple runs share a problem, method, and seed; select one campaign "
+            "and compatible backend/size settings before comparing methods"
+        )
     if sub.empty:
         return pd.DataFrame(
             columns=[

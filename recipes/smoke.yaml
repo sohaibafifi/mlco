@@ -1,35 +1,29 @@
-# Smoke experiment - one problem, one seed, fast settings.
-# Sanity-check that `neuroco run-experiment` runs end-to-end on a
-# fresh checkout. Real paper experiments declare their own YAMLs
-# under this directory; budget audit them before submitting.
+# A complete, short CPU workflow. It validates infrastructure, not policy quality.
 name: smoke
-description: |
-  Single-seed VRPTW run, ~1 minute on CPU. Used by CI + as a template.
-
+description: TSP training, nearest-neighbour reference, fixed-test evaluation and gradient explanation.
 parallel: 1
-
 problems:
-  vrptw:
+  tsp:
     seeds: [0]
     train:
-      overrides:
-        - "trainer.max_epochs=1"
-        - "model.train_data_size=256"
-        - "model.batch_size=32"
-        - "energy.backend=tdp"
-    baseline:
-      overrides:
-        - "baseline.num_problems=4"
-        - "baseline.max_runtime_s=1.0"
-        - "energy.backend=tdp"
-    eval:
-      overrides:
-        - "energy.backend=tdp"
+      backend: torch
+      device: cpu
+      algo: pomo
+      backbone: am
+      size: 6
+      epochs: 1
+      steps_per_epoch: 2
+      batch_size: 4
+      eval_batch_size: 8
+      hidden_dim: 16
+      num_layers: 1
+      num_heads: 2
+      n_starts: 2
+    baseline: {}
+    eval: {}
     explain:
-      methods: [gradient, contrastive]
-      overrides:
-        - "xai.num_instances=4"
-        - "xai.run_sufficiency=true"
-        - "xai.run_encoder_probes=true"
-    probe:
-      args: ["--num-instances", "4", "--epochs", "30", "--pca-components", "5"]
+      methods: [gradient]
+      num_instances: 2
+      top_k: 2
+      max_steps: 2
+      run_sufficiency: true

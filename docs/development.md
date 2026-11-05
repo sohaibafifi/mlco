@@ -56,6 +56,19 @@ and distribution builds. Individual targets are `versions`, `lint`, `typecheck`,
 `test`, `docs`, and `build`. Use `make format` to apply formatter and lint fixes.
 On systems without Make, run the commands in the Makefile directly.
 
+`make wheel-smoke` additionally installs the built wheels into fresh temporary
+environments outside the checkout. It checks minimal `core+problems`, CLI, and
+CLI reporting profiles, plus a full profile installing all ten distributions.
+The reporting profile executes the complete CPU smoke recipe. CI runs these
+checks on Python 3.11 and 3.12. To check one profile:
+
+```bash
+uv run --no-sync python scripts/smoke_wheels.py --dist-dir dist --profile minimal
+```
+
+Third-party dependencies are resolved using their package metadata. Use
+`--offline` only when all required dependencies are already in the uv cache.
+
 Commit `uv.lock`. Use frozen installs for ordinary development; change dependency
 constraints deliberately, run `uv lock`, and review the lockfile diff. Commands
 use `uv run --no-sync` so checks do not change the installed environment.

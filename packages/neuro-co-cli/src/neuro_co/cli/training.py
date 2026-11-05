@@ -6,8 +6,11 @@ import csv
 import hashlib
 import json
 import math
+import os
 import platform
+import shutil
 import sys
+import tempfile
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -155,7 +158,40 @@ def device_info(trainer: Any, requested: str) -> dict:
 
 
 def _write(path: Path, payload: dict) -> None:
-    path.write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n")
+    """Replace JSON only after serialization and flushing succeed."""
+    encoded = json.dumps(payload, indent=2, allow_nan=False) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=path.parent, prefix=f".{path.name}.", delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def _copy_checkpoint(source: Path, target: Path) -> None:
+    """Replace a public checkpoint alias without altering its saved training state."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=target.parent, prefix=f".{target.name}.", delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            with source.open("rb") as original:
+                shutil.copyfileobj(original, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def _progress(
@@ -180,132 +216,307 @@ def _evaluate(trainer: Any, data: dict[str, np.ndarray]) -> tuple[np.ndarray, fl
     return costs, elapsed
 
 
-def train(config: TrainingConfig, backend: str, device: str, output: Path) -> dict:
+def _resume_path(output: Path, resume_from: Path | str) -> Path:
+    path = Path(resume_from)
+    if not path.is_absolute() and not path.is_file():
+        path = output / path
+    if path.parent.resolve() != output.resolve():
+        raise ValueError("Resume checkpoint must belong to the selected output directory")
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    return path
+
+
+def train(
+    config: TrainingConfig,
+    backend: str,
+    device: str,
+    output: Path,
+    *,
+    resume_from: Path | str | None = None,
+    checkpoint_every_steps: int | None = None,
+) -> dict:
+    """Train to a total update target; Torch checkpoints preserve outer-loop progress."""
+    from .artifacts import write_run
+
+    if checkpoint_every_steps is not None and (
+        type(checkpoint_every_steps) is not int or checkpoint_every_steps <= 0
+    ):
+        raise ValueError("checkpoint_every_steps must be positive or None")
     output = Path(output)
-    if output.exists() and any(output.iterdir()):
-        raise FileExistsError(f"{output} is not empty; select a new output directory")
+    checkpoint = None
+    saved_progress = None
+    if resume_from is not None:
+        if backend != "torch":
+            raise ValueError("CLI resume currently requires the Torch backend")
+        checkpoint = _resume_path(output, resume_from)
+        saved = json.loads((output / "config.json").read_text())
+        expected = asdict(config)
+        previous = dict(saved.get("training", {}))
+        # Epoch count is a total target and may be extended; the update/validation cadence cannot.
+        if (
+            saved.get("schema") != SCHEMA
+            or saved.get("backend") != backend
+            or ("cpu" if saved.get("device") == "auto" else saved.get("device"))
+            != ("cpu" if device == "auto" else device)
+            or {k: v for k, v in previous.items() if k != "epochs"}
+            != {k: v for k, v in expected.items() if k != "epochs"}
+        ):
+            raise ValueError("Resume configuration, backend, or device differs from the saved run")
+        import torch
+
+        saved_progress = torch.load(checkpoint, map_location="cpu", weights_only=True).get(
+            "run_state"
+        )
+        if not isinstance(saved_progress, dict) or saved_progress.get("version") != 1:
+            raise ValueError("Checkpoint lacks resumable CLI progress; start a new run")
+        if saved_progress["step"] > config.total_steps:
+            raise ValueError("Total update target precedes the saved checkpoint")
+    elif output.exists() and any(output.iterdir()):
+        raise FileExistsError(f"{output} is not empty; select a new output directory or --resume")
+
     started = time.perf_counter()
     weights = initial_weights(config)
     trainer = make_trainer(config, backend, device, weights)
     trainer.synchronize()
     setup_s = time.perf_counter() - started
+    if checkpoint is not None:
+        assert saved_progress is not None
+        restored_step = trainer.load(checkpoint)
+        if restored_step != saved_progress["step"]:
+            raise ValueError("Checkpoint and CLI progress disagree")
+    if saved_progress is not None:
+        setup_s += saved_progress.get("setup_s", 0.0)
+    progress = saved_progress or {
+        "version": 1,
+        "step": 0,
+        "history": [],
+        "training_s": 0.0,
+        "validation_s": 0.0,
+        "first_step_s": 0.0,
+        "best_cost": None,
+        "best_step": 0,
+        "best_checkpoint": None,
+        "training_digest": "",
+        "last_metrics": {},
+        "elapsed_s": 0.0,
+    }
+    history = list(progress["history"])
+    step = progress["step"]
+    training_s = progress["training_s"]
+    validation_s = progress["validation_s"]
+    first_step_s = progress["first_step_s"]
+    best_cost = progress["best_cost"] if progress["best_cost"] is not None else float("inf")
+    best_step = progress["best_step"]
+    best_checkpoint = progress["best_checkpoint"]
+    training_digest = progress["training_digest"]
+    metrics = dict(progress["last_metrics"])
+    previous_elapsed = progress["elapsed_s"]
+    if best_checkpoint is not None and not (output / best_checkpoint).is_file():
+        raise ValueError("Selected best checkpoint is missing from the saved run")
     output.mkdir(parents=True, exist_ok=True)
     _write(
         output / "config.json",
-        {"schema": SCHEMA, "backend": backend, "device": device, "training": asdict(config)},
+        {
+            "schema": SCHEMA,
+            "backend": backend,
+            "device": device,
+            "training": asdict(config),
+        },
     )
     validation = batch(config, "validation")
     test = batch(config, "test")
-    history = []
-    step = 0
-    training_s = validation_s = 0.0
-    first_step_s = 0.0
-    best_cost = float("inf")
-    best_step = 0
-    train_digest = hashlib.sha256()
     best_path = output / ("best" + trainer.checkpoint_suffix)
     last_path = output / ("latest.pt" if backend == "torch" else "checkpoint.npz")
     last_report = 0.0
-    for epoch in range(config.epochs):
-        _progress(backend, config, step, started, training_s, f"epoch {epoch + 1}/{config.epochs}")
-        for _ in range(config.steps_per_epoch):
+
+    def run_metrics() -> dict:
+        elapsed = previous_elapsed + time.perf_counter() - started
+        result = {
+            "step": step,
+            "best_step": best_step,
+            "training_s": training_s,
+            "validation_s": validation_s,
+            "setup_s": setup_s,
+            "first_train_step_s": first_step_s,
+            "warm_train_step_mean_s": (training_s - first_step_s) / (step - 1)
+            if step > 1
+            else None,
+            "duration_s": elapsed,
+            "total_s": elapsed,
+        }
+        if math.isfinite(best_cost):
+            result["best_validation_cost"] = best_cost
+            result["best_reward"] = -best_cost
+        return result
+
+    def manifest(status: str, error: str | None = None) -> None:
+        write_run(
+            output,
+            kind="train",
+            problem=config.problem,
+            seed=config.seed,
+            backend=backend,
+            config={**asdict(config), "device": device},
+            metrics=run_metrics(),
+            artifacts={
+                "config": "config.json",
+                "metrics": "metrics.json",
+                "evaluation": "evaluation.json",
+                "latest": last_path.name,
+                "best": best_path.name,
+            },
+            status=status,
+            error=error,
+        )
+
+    def save_latest() -> None:
+        record = {
+            "version": 1,
+            "step": step,
+            "history": history,
+            "training_s": training_s,
+            "validation_s": validation_s,
+            "setup_s": setup_s,
+            "first_step_s": first_step_s,
+            "best_cost": best_cost if math.isfinite(best_cost) else None,
+            "best_step": best_step,
+            "best_checkpoint": best_checkpoint,
+            "training_digest": training_digest,
+            "last_metrics": metrics,
+            "elapsed_s": previous_elapsed + time.perf_counter() - started,
+        }
+        if backend == "torch":
+            trainer.save(last_path, step, progress=record)
+        else:
+            trainer.save(last_path, step)
+
+    manifest("running")
+    try:
+        if step == 0:
+            save_latest()
+        while True:
+            # A crash can occur between the last update of an epoch and its validation.
+            validated_step = history[-1]["step"] if history else 0
+            pending_validation = (
+                step > 0 and step % config.steps_per_epoch == 0 and validated_step < step
+            )
+            if pending_validation:
+                epoch = step // config.steps_per_epoch - 1
+                _progress(backend, config, step, started, training_s, "validation")
+                costs, duration = _evaluate(trainer, validation)
+                validation_s += duration
+                cost = float(costs.mean())
+                history.append(
+                    {
+                        "epoch": epoch,
+                        "step": step,
+                        "eval_reward": -cost,
+                        "eval_tour_length": cost,
+                        "training_s": training_s,
+                        **metrics,
+                    }
+                )
+                previous_best = best_checkpoint
+                if cost < best_cost:
+                    best_cost, best_step = cost, step
+                    # Immutable selections keep the previous latest checkpoint self-consistent
+                    # if a process dies while replacing the public best.pt alias.
+                    best_checkpoint = f"best-step-{step}{trainer.checkpoint_suffix}"
+                    trainer.save(output / best_checkpoint, step)
+                    _copy_checkpoint(output / best_checkpoint, best_path)
+                save_latest()
+                if previous_best is not None and previous_best != best_checkpoint:
+                    (output / previous_best).unlink(missing_ok=True)
+                continue
+            if step >= config.total_steps:
+                break
             trainer.synchronize()
             step_started = time.perf_counter()
             data = batch(config, "train", step)
             metrics = trainer.train_step(data)
             trainer.synchronize()
             duration = time.perf_counter() - step_started
+            if not all(math.isfinite(float(value)) for value in metrics.values()):
+                raise FloatingPointError(f"Non-finite training metrics at step {step + 1}")
             training_s += duration
             if step == 0:
                 first_step_s = duration
-            train_digest.update(array_digest(data).encode())
+            training_digest = hashlib.sha256(
+                bytes.fromhex(training_digest) + array_digest(data).encode()
+            ).hexdigest()
             step += 1
-            if not all(math.isfinite(float(value)) for value in metrics.values()):
-                raise FloatingPointError(f"Non-finite training metrics at step {step}")
+            if checkpoint_every_steps is not None and step % checkpoint_every_steps == 0:
+                save_latest()
             now = time.perf_counter()
             if step in (1, config.total_steps) or now - last_report >= 5:
                 _progress(backend, config, step, started, training_s, "training")
                 last_report = now
-        _progress(backend, config, step, started, training_s, "validation")
-        costs, duration = _evaluate(trainer, validation)
-        validation_s += duration
-        cost = float(costs.mean())
-        history.append(
-            {
-                "epoch": epoch,
-                "step": step,
-                "eval_reward": -cost,
-                "eval_tour_length": cost,
-                "training_s": training_s,
-                **metrics,
-            }
-        )
-        trainer.save(last_path, step)
-        if cost < best_cost:
-            best_cost, best_step = cost, step
-            trainer.save(best_path, step)
-        _progress(backend, config, step, started, training_s, f"validation cost={cost:.6f}")
-    trainer.load(best_path)
-    _progress(backend, config, step, started, training_s, "testing best checkpoint")
-    costs, test_first_s = _evaluate(trainer, test)
-    warm_costs, test_warm_s = _evaluate(trainer, test)
-    if not np.allclose(costs, warm_costs):
-        raise RuntimeError("Repeated greedy evaluation changed costs")
-    evaluation = {
-        "schema": SCHEMA,
-        "backend": backend,
-        "problem": config.problem,
-        "checkpoint": best_path.name,
-        "device": device_info(trainer, device),
-        "step": best_step,
-        "num_instances": config.eval_batch_size,
-        "greedy_tour_length": float(costs.mean()),
-        "costs": costs.tolist(),
-        "test_sha256": array_digest(test),
-        "first_call_s": test_first_s,
-        "warm_call_s": test_warm_s,
-    }
-    _write(output / "evaluation.json", evaluation)
-    payload = {
-        "schema": SCHEMA,
-        "backend": backend,
-        "args": {**asdict(config), "out_dir": str(output)},
-        "device": device_info(trainer, device),
-        "best_reward": -best_cost,
-        "best_step": best_step,
-        "history": history,
-        "protocol": {
-            "initial_weights_sha256": array_digest(weights),
-            "training_data_sha256": train_digest.hexdigest(),
-            "validation_sha256": array_digest(validation),
+        if best_checkpoint is None:
+            raise RuntimeError("No validated checkpoint was selected")
+        selected_path = output / best_checkpoint
+        if backend == "torch":
+            trainer.load(selected_path, resume=False)
+        else:
+            trainer.load(selected_path)
+        _copy_checkpoint(selected_path, best_path)
+        _progress(backend, config, step, started, training_s, "testing best checkpoint")
+        costs, test_first_s = _evaluate(trainer, test)
+        warm_costs, test_warm_s = _evaluate(trainer, test)
+        if not np.allclose(costs, warm_costs):
+            raise RuntimeError("Repeated greedy evaluation changed costs")
+        evaluation = {
+            "schema": SCHEMA,
+            "backend": backend,
+            "problem": config.problem,
+            "checkpoint": best_path.name,
+            "device": device_info(trainer, device),
+            "step": best_step,
+            "num_instances": config.eval_batch_size,
+            "greedy_tour_length": float(costs.mean()),
+            "costs": costs.tolist(),
             "test_sha256": array_digest(test),
-            "checkpoint_selection": "lowest validation cost",
-            "evaluation": "single greedy on separate test instances",
-            "sampling": "backend-specific random action sampling",
-        },
-        "timing": {
-            "setup_s": setup_s,
-            "training_s": training_s,
-            "first_train_step_s": first_step_s,
-            "warm_train_step_mean_s": (training_s - first_step_s) / (step - 1)
-            if step > 1
-            else None,
-            "validation_s": validation_s,
-            "test_first_call_s": test_first_s,
-            "test_warm_call_s": test_warm_s,
-            "total_s": time.perf_counter() - started,
-        },
-    }
-    _write(output / "metrics.json", payload)
-    _progress(
-        backend,
-        config,
-        step,
-        started,
-        training_s,
-        f"finished | test cost={costs.mean():.6f} | training={training_s:.2f}s",
-    )
-    return payload
+            "first_call_s": test_first_s,
+            "warm_call_s": test_warm_s,
+        }
+        _write(output / "evaluation.json", evaluation)
+        payload = {
+            "schema": SCHEMA,
+            "backend": backend,
+            "args": {**asdict(config), "out_dir": str(output)},
+            "device": device_info(trainer, device),
+            "best_reward": -best_cost,
+            "best_step": best_step,
+            "history": history,
+            "protocol": {
+                "initial_weights_sha256": array_digest(weights),
+                "training_data_sha256": training_digest,
+                "training_digest": "sha256 chain of ordered batch digests/v1",
+                "validation_sha256": array_digest(validation),
+                "test_sha256": array_digest(test),
+                "checkpoint_selection": "lowest validation cost",
+                "evaluation": "single greedy on separate test instances",
+                "sampling": "backend-specific random action sampling",
+            },
+            "timing": {
+                "setup_s": setup_s,
+                "training_s": training_s,
+                "first_train_step_s": first_step_s,
+                "warm_train_step_mean_s": (training_s - first_step_s) / (step - 1)
+                if step > 1
+                else None,
+                "validation_s": validation_s,
+                "test_first_call_s": test_first_s,
+                "test_warm_call_s": test_warm_s,
+                "total_s": previous_elapsed + time.perf_counter() - started,
+            },
+        }
+        _write(output / "metrics.json", payload)
+        manifest("complete")
+        return payload
+    except BaseException as error:
+        manifest("failed", f"{type(error).__name__}: {error}")
+        raise
 
 
 def evaluate_saved_run(checkpoint: Path, device: str = "cpu") -> dict:

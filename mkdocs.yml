@@ -21,6 +21,7 @@ nav:
   - Home: index.md
   - Getting started: getting-started.md
   - Training: training.md
+  - Experiments: experiments.md
   - Energy accounting: aet.md
   - Scaling: scale.md
   - Development: development.md

@@ -256,6 +256,8 @@ def plot_cross_seed_stability(df: Any, out: Path) -> Path | None:
 def render_all(df: Any, out_dir: Path, ext: str = "pdf") -> list[Path]:
     """Render each available plot into `out_dir`. Skipped panels are listed in the log."""
     out_dir = Path(out_dir)
+    if "status" in df.columns:
+        df = df[df["status"] == "complete"]
     written: list[Path] = []
     panels = (
         ("probe_accuracy_heatmap", plot_probe_accuracy_heatmap),

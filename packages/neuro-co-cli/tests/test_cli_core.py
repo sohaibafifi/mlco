@@ -101,9 +101,20 @@ def test_experiment_entrypoint_routes_only_to_generic_executor(
     assert observed == [recipe]
 
 
-def test_experiment_entrypoint_rejects_package_specific_flags(tmp_path) -> None:
+def test_experiment_entrypoint_forwards_campaign_controls(tmp_path, monkeypatch) -> None:
     recipe = tmp_path / "recipe.yaml"
     recipe.write_text("name: generic\n", encoding="utf-8")
-
-    with pytest.raises(SystemExit, match="2"):
-        experiment.main_run_cli(["--dry-run", str(recipe)])
+    observed = []
+    monkeypatch.setattr(
+        experiment,
+        "run_experiment",
+        lambda path, **options: observed.append((path, options)) or 0,
+    )
+    destination = tmp_path / "campaign"
+    assert (
+        experiment.main_run_cli(
+            [str(recipe), "--out-dir", str(destination), "--retry-failed", "--dry-run"]
+        )
+        == 0
+    )
+    assert observed == [(recipe, dict(out_dir=destination, retry_failed=True, dry_run=True))]

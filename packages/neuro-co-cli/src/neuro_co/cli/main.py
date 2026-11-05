@@ -50,6 +50,17 @@ def _add_train(sub: Any) -> None:
     p.add_argument("--test-seed", type=int, default=defaults.test_seed)
     p.add_argument("--precision", default=defaults.precision, choices=["fp32"])
     p.add_argument("--out-dir", default="outputs/run")
+    p.add_argument(
+        "--resume",
+        default=None,
+        help="resume a Torch checkpoint in --out-dir; epochs is the total target",
+    )
+    p.add_argument(
+        "--checkpoint-every-steps",
+        type=int,
+        default=None,
+        help="also save latest.pt every N updates; default: each epoch",
+    )
     p.add_argument("--device", default="cpu")
 
 

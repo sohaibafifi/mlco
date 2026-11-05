@@ -62,6 +62,7 @@ def explain_policy(
     probe_val_frac: float = 0.3,
     probe_lr: float = 1e-2,
     seed: int = 42,
+    device: str | torch.device | None = None,
 ) -> dict[str, Any]:
     """Attribute + evaluate faithfulness for `model` on `env`, write JSON.
 
@@ -73,6 +74,8 @@ def explain_policy(
         Optional state-dict checkpoint to load into `model`.
     method
         `"gradient"`, `"ig"`, or `"contrastive"`.
+    device
+        Explicit execution device, or automatic accelerator selection when omitted.
     """
     output_dir = Path(output_dir or "./outputs/explain")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -90,11 +93,15 @@ def explain_policy(
             log.warning("unexpected keys: %s", unexpected[:5])
 
     device = (
-        torch.device("cuda")
-        if torch.cuda.is_available()
-        else torch.device("mps")
-        if torch.backends.mps.is_available()
-        else torch.device("cpu")
+        torch.device(device)
+        if device is not None
+        else (
+            torch.device("cuda")
+            if torch.cuda.is_available()
+            else torch.device("mps")
+            if torch.backends.mps.is_available()
+            else torch.device("cpu")
+        )
     )
     model = model.to(device).eval()
     state = env.reset(num_instances, generator=torch.Generator().manual_seed(seed)).to(device)
