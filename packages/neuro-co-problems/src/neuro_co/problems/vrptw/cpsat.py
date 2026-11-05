@@ -33,10 +33,15 @@ because CP-SAT requires integer coefficients.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal, overload
 
 import numpy as np
 from ortools.sat.python import cp_model
+
+from neuro_co.core.result import SolveResult, SolveStatus
+from neuro_co.problems.instances import RoutingInstance
+from neuro_co.problems.solver_result import cp_result, source_matrix
+from neuro_co.problems.validation import validate_routes
 
 # Capacity gets its own scale (demand often in [0, 1] -> need >0
 # resolution); travel-time stays unscaled because the CVRPTW
@@ -47,12 +52,36 @@ _CAP_SCALE = 1000
 _DIST_SCALE = 1  # objective uses raw int distances (lossy by ~0.5%)
 
 
+@overload
 def solve_cvrptw_cpsat(
     instance: Any,
     *,
     max_runtime: float = 10.0,
     feasibility_only: bool = False,
-) -> tuple[list[list[int]], float]:
+    return_result: Literal[False] = False,
+    cost_matrix: Any | None = None,
+) -> tuple[list[list[int]], float]: ...
+
+
+@overload
+def solve_cvrptw_cpsat(
+    instance: Any,
+    *,
+    max_runtime: float = 10.0,
+    feasibility_only: bool = False,
+    return_result: Literal[True],
+    cost_matrix: Any | None = None,
+) -> SolveResult: ...
+
+
+def solve_cvrptw_cpsat(
+    instance: Any,
+    *,
+    max_runtime: float = 10.0,
+    feasibility_only: bool = False,
+    return_result: bool = False,
+    cost_matrix: Any | None = None,
+) -> tuple[list[list[int]], float] | SolveResult:
     """Solve one CVRPTW instance with raw CP-SAT.
 
     Parameters
@@ -78,10 +107,22 @@ def solve_cvrptw_cpsat(
     locs, demand, tw, service, Q = _unpack(instance)
     n = locs.shape[0]
     if n < 3:
+        if return_result:
+            return SolveResult(
+                problem="cvrptw",
+                method="cpsat",
+                status=SolveStatus.INVALID,
+                solver_status="INVALID_INSTANCE",
+                feasible=None,
+            )
         return [], float("nan")
 
     diff = locs[:, None, :] - locs[None, :, :]
-    dist = np.sqrt((diff * diff).sum(axis=-1))
+    dist = (
+        np.sqrt((diff * diff).sum(axis=-1))
+        if cost_matrix is None
+        else source_matrix(locs, cost_matrix)
+    )
     # Distances stay in raw int units to match the TW scale.
     d_int = np.round(dist).astype(np.int64)
 
@@ -94,6 +135,14 @@ def solve_cvrptw_cpsat(
     tw_open_int = np.floor(tw[:, 0]).astype(np.int64)
     tw_close_int = np.ceil(tw[:, 1]).astype(np.int64)
     service_int = np.round(service).astype(np.int64)
+    exact = bool(
+        np.array_equal(d_int, dist)
+        and np.array_equal(demand_int / _CAP_SCALE, demand)
+        and Q_int / _CAP_SCALE == Q
+        and np.array_equal(tw_open_int, tw[:, 0])
+        and np.array_equal(tw_close_int, tw[:, 1])
+        and np.array_equal(service_int, service)
+    )
     # `big_t` reserved for a future big-M-style relaxation of TW
     # constraints; current MTZ form uses OnlyEnforceIf instead.
     _ = int(tw_close_int.max() + d_int.max() * n + 1)
@@ -130,6 +179,9 @@ def solve_cvrptw_cpsat(
     for (i, j), used in lit.items():
         if j == 0:
             # Returning to depot: load resets, no arrival propagation.
+            model.Add(
+                arr[i] + int(d_int[i, 0]) + int(service_int[i]) <= int(tw_close_int[0])
+            ).OnlyEnforceIf(used)
             continue
         model.Add(load[j] >= load[i] + int(demand_int[j])).OnlyEnforceIf(used)
         model.Add(arr[j] >= arr[i] + int(d_int[i, j]) + int(service_int[i])).OnlyEnforceIf(used)
@@ -156,6 +208,13 @@ def solve_cvrptw_cpsat(
 
     status = solver.Solve(model)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        if return_result:
+            return cp_result(
+                "cvrptw",
+                solver,
+                status,
+                metadata={"model_distance_convention": "euc_2d", "model_matches_source": exact},
+            )
         return [], float("nan")
 
     # Reconstruct routes by following arc literals. The depot has
@@ -184,6 +243,35 @@ def solve_cvrptw_cpsat(
             routes.append(route)
 
     cost = -float(solver.ObjectiveValue()) / max(1, _DIST_SCALE)  # the sign
+    if return_result:
+        objective = sum(
+            float(d_int[a, b])
+            for route in routes
+            for a, b in zip((0, *route), (*route, 0), strict=True)
+        )
+        validation = validate_routes(
+            RoutingInstance(
+                problem="cvrptw",
+                coords=locs,
+                demand=demand,
+                capacity=Q,
+                time_windows=tw,
+                service_time=service,
+                cost_matrix=dist,
+                distance_convention="explicit",
+            ),
+            routes,
+        )
+        return cp_result(
+            "cvrptw",
+            solver,
+            status,
+            solution={"routes": routes},
+            objective=objective,
+            feasibility_only=feasibility_only,
+            validation=validation,
+            metadata={"model_distance_convention": "euc_2d", "model_matches_source": exact},
+        )
     return routes, cost
 
 

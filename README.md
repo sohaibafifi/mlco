@@ -37,6 +37,15 @@ uv run --no-sync neuroco experiment recipes/smoke.yaml
 
 See [experiments](docs/experiments.md) for isolated campaigns, retries, and results.
 
+To solve supplied routing data and export a validated solution:
+
+```bash
+uv run --no-sync neuroco solve instance.vrp --ckpt outputs/cvrp/best.pt --out solution.json
+```
+
+The [solve API and command](docs/solving.md) also support reference heuristics and
+optional classical backends, with a common result and explicit solver status.
+
 ## Packages
 
 | Package | Purpose |

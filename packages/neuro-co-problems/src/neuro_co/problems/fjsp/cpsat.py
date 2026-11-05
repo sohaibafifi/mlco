@@ -14,29 +14,54 @@ routing/scheduling specialised API).
 from __future__ import annotations
 
 from itertools import pairwise
-from typing import Any
+from typing import Any, Literal, overload
 
 import numpy as np
 from ortools.sat.python import cp_model
 
+from neuro_co.core.result import SolveResult, SolveStatus
+from neuro_co.problems.solver_result import cp_result, validate_schedule
+
 
 def _td_to_jobs(instance: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     proc = instance["proc_times"].cpu().numpy()
+    job_map = instance["ops_job_map"].cpu().numpy()
+    order = instance["ops_sequence_order"].cpu().numpy()
+    n_ops = int(job_map.shape[-1])
     pad = (
         instance["pad_mask"].cpu().numpy()
         if "pad_mask" in instance
-        else np.zeros(proc.shape[-1], dtype=bool)
+        else np.zeros(n_ops, dtype=bool)
     )
-    job_map = instance["ops_job_map"].cpu().numpy()
-    order = instance["ops_sequence_order"].cpu().numpy()
     # Accept both the historical solver layout [M, O] and the core
     # environment layout [O, M]. The job map identifies the op axis.
-    n_ops = int(job_map.shape[-1])
     if proc.shape[0] == n_ops:
         proc = proc.T
     elif proc.shape[1] != n_ops:
         raise ValueError(f"cannot locate operation axis in proc_times {proc.shape} for {n_ops} ops")
     return proc, pad, job_map, order
+
+
+@overload
+def solve_fjsp(
+    instance: Any,
+    *,
+    max_runtime: float = 5.0,
+    scale: int = 1000,
+    feasibility_only: bool = False,
+    return_result: Literal[False] = False,
+) -> tuple[list[tuple[int, int, float]], float]: ...
+
+
+@overload
+def solve_fjsp(
+    instance: Any,
+    *,
+    max_runtime: float = 5.0,
+    scale: int = 1000,
+    feasibility_only: bool = False,
+    return_result: Literal[True],
+) -> SolveResult: ...
 
 
 def solve_fjsp(
@@ -45,7 +70,8 @@ def solve_fjsp(
     max_runtime: float = 5.0,
     scale: int = 1000,
     feasibility_only: bool = False,
-) -> tuple[list[tuple[int, int, float]], float]:
+    return_result: bool = False,
+) -> tuple[list[tuple[int, int, float]], float] | SolveResult:
     """Solve a single FJSP instance with CP-SAT.
 
     Parameters
@@ -67,11 +93,35 @@ def solve_fjsp(
     """
     proc, pad, job_map, order = _td_to_jobs(instance)
     n_machines, n_ops = proc.shape
+    if return_result and (
+        n_ops == 0
+        or n_machines == 0
+        or not np.isfinite(proc).all()
+        or np.any(proc < 0)
+        or job_map.shape != (n_ops,)
+        or order.shape != (n_ops,)
+        or pad.shape != (n_ops,)
+        or not np.isfinite(job_map).all()
+        or not np.isfinite(order).all()
+        or np.any(job_map < 0)
+        or np.any(order < 0)
+        or not np.array_equal(job_map, np.floor(job_map))
+        or not np.array_equal(order, np.floor(order))
+        or len(set(zip(job_map.tolist(), order.tolist(), strict=True))) != n_ops
+    ):
+        raise ValueError("FJSP requires finite processing times and valid operation/job arrays")
     proc_int = np.maximum(0, np.round(proc * scale).astype(np.int64))
     horizon = max(1, int(proc_int.sum()))
 
     active = [i for i in range(n_ops) if not pad[i]]
     if not active:
+        if return_result:
+            return SolveResult(
+                problem="fjsp",
+                method="cpsat",
+                status=SolveStatus.INVALID,
+                solver_status="NO_ACTIVE_OPERATIONS",
+            )
         return [], float("nan")
 
     model = cp_model.CpModel()
@@ -92,6 +142,17 @@ def solve_fjsp(
             intervals_per_machine[m].append(ivar)
             machine_choices[i].append((m, chosen))
         if not machine_choices[i]:
+            if return_result:
+                removed = bool(np.any(proc[:, i] > 0))
+                return SolveResult(
+                    problem="fjsp",
+                    method="cpsat",
+                    status=SolveStatus.UNKNOWN if removed else SolveStatus.INFEASIBLE,
+                    feasible=None if removed else False,
+                    solver_status="ROUNDING_REMOVED_ELIGIBILITY"
+                    if removed
+                    else "NO_ELIGIBLE_MACHINE",
+                )
             return [], float("nan")  # op with no eligible machine
         model.AddExactlyOne([c for _, c in machine_choices[i]])
 
@@ -125,8 +186,16 @@ def solve_fjsp(
         solver.parameters.stop_after_first_solution = True
     status = solver.Solve(model)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        if return_result:
+            return cp_result(
+                "fjsp",
+                solver,
+                status,
+                scale=scale,
+                metadata={"model_matches_source": bool(np.array_equal(proc_int / scale, proc))},
+            )
         return [], float("nan")
-    if feasibility_only:
+    if feasibility_only and not return_result:
         return [], 0.0
 
     schedule: list[tuple[int, int, float]] = []
@@ -134,4 +203,19 @@ def solve_fjsp(
         chosen_machine = next((m for m, c in machine_choices[i] if solver.Value(c)), -1)
         schedule.append((i, chosen_machine, solver.Value(starts[i]) / scale))
     ms = solver.Value(makespan) / scale
+    if return_result:
+        return cp_result(
+            "fjsp",
+            solver,
+            status,
+            solution={"schedule": schedule},
+            objective=float(ms),
+            scale=scale,
+            feasibility_only=feasibility_only,
+            validation=validate_schedule(schedule, proc, job_map, order, active),
+            metadata={
+                "scale": scale,
+                "model_matches_source": bool(np.array_equal(proc_int / scale, proc)),
+            },
+        )
     return schedule, -float(ms)

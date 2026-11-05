@@ -36,3 +36,19 @@ solver = get_solver("vrptw", "pyvrp")
 Install `pyvrp`, `ortools`, or the combined `cp` extra for classical solvers.
 Solver arguments depend on the problem adapter. Concept and solver plugins
 register through the `neuro_co.problems` entry-point group.
+
+## Solving supplied data
+
+```python
+from neuro_co.problems import load_instance, solve
+
+instance = load_instance("instance.vrp")
+result = solve(instance, method="nearest_neighbour")
+print(result.status, result.objective, result.validation)
+payload = result.to_dict()
+```
+
+The same API accepts a checkpoint with `method="neural"` and supports optional
+classical backends. `SolveResult` records solver status, objective, validation,
+runtime, and applicable bounds in one serializable contract. See
+[solving instances](../../docs/solving.md) for formats and method support.

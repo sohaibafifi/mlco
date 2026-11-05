@@ -18,11 +18,15 @@ from __future__ import annotations
 
 import math
 import operator
+import time
 from dataclasses import dataclass
 from itertools import pairwise
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
+
+from neuro_co.core.result import SolveResult, SolveStatus
+from neuro_co.problems.solver_result import source_loads, source_matrix, validate_cvrp
 
 DEFAULT_SCALING_FACTOR = 1_000_000
 _MAX_SEED = 2**31 - 1
@@ -115,16 +119,19 @@ def solve_corpus_sequential(
         zip(corpus_coords, corpus_demands, strict=True)
     ):
         results.append(
-            _solve_instance(
-                instance_coords,
-                instance_demands,
-                capacity,
-                instance_index=instance_index,
-                seed=base_seed + instance_index,
-                max_runtime_s=runtime,
-                solution_limit=solutions,
-                scaling_factor=factor,
-                limit_kind=limit_kind,
+            cast(
+                CVRPSolveResult,
+                _solve_instance(
+                    instance_coords,
+                    instance_demands,
+                    capacity,
+                    instance_index=instance_index,
+                    seed=base_seed + instance_index,
+                    max_runtime_s=runtime,
+                    solution_limit=solutions,
+                    scaling_factor=factor,
+                    limit_kind=limit_kind,
+                ),
             )
         )
     return results
@@ -141,10 +148,16 @@ def _solve_instance(
     solution_limit: int | None,
     scaling_factor: int,
     limit_kind: str,
-) -> CVRPSolveResult:
+    cost_matrix: Any | None = None,
+    return_result: bool = False,
+) -> CVRPSolveResult | SolveResult:
     from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
-    matrix = integer_distance_matrix(coords, scaling_factor)
+    started = time.perf_counter()
+    original_matrix = source_matrix(coords, cost_matrix)
+    scaled = original_matrix * scaling_factor
+    _check_int64_range("scaled distances", scaled)
+    matrix = np.ascontiguousarray(np.rint(scaled).astype(np.int64))
     loads, vehicle_capacity = _scaled_loads(
         demands,
         capacity,
@@ -199,6 +212,19 @@ def _solve_instance(
     status_code = int(routing.status())
     status = _SEARCH_STATUS_NAMES.get(status_code, f"ROUTING_STATUS_{status_code}")
     if assignment is None:
+        if return_result:
+            mapped = {
+                "ROUTING_INFEASIBLE": SolveStatus.INFEASIBLE,
+                "ROUTING_INVALID": SolveStatus.INVALID,
+            }.get(status, SolveStatus.UNKNOWN)
+            return SolveResult(
+                problem="cvrp",
+                method="ortools",
+                status=mapped,
+                feasible=False if mapped == SolveStatus.INFEASIBLE else None,
+                runtime_s=time.perf_counter() - started,
+                solver_status=status,
+            )
         raise RuntimeError(
             f"OR-Tools returned no feasible CVRP solution for instance {instance_index}: {status}"
         )
@@ -210,6 +236,37 @@ def _solve_instance(
     if objective != integer_cost:
         raise RuntimeError(
             f"OR-Tools objective disagrees with extracted routes for instance {instance_index}"
+        )
+    if return_result:
+        validation = validate_cvrp(routes, original_matrix, demands, capacity)
+        exact = bool(
+            np.array_equal(matrix / scaling_factor, original_matrix)
+            and np.array_equal(loads / scaling_factor, np.asarray(demands))
+            and vehicle_capacity / scaling_factor == capacity
+        )
+        optimal = status == "ROUTING_OPTIMAL" and exact and validation.feasible
+        return SolveResult(
+            problem="cvrp",
+            method="ortools",
+            status=SolveStatus.INVALID
+            if not validation.feasible
+            else SolveStatus.OPTIMAL
+            if optimal
+            else SolveStatus.FEASIBLE,
+            solution={"routes": [list(route) for route in routes]},
+            objective=validation.objective,
+            feasible=validation.feasible,
+            validation=validation,
+            bound=validation.objective if optimal else None,
+            gap=0.0 if optimal else None,
+            runtime_s=time.perf_counter() - started,
+            solver_status=status,
+            metadata={
+                "seed": seed,
+                "scaling_factor": scaling_factor,
+                "integer_objective": integer_cost,
+                "model_matches_source": exact,
+            },
         )
     return CVRPSolveResult(
         instance_index=instance_index,
@@ -223,6 +280,51 @@ def _solve_instance(
         solution_limit=solution_limit,
         search_status=status,
     )
+
+
+def solve_instance_result(
+    coords: Any,
+    demands: Any,
+    capacity: float,
+    *,
+    seed: int = 0,
+    max_runtime_s: float = 5.0,
+    scaling_factor: int = DEFAULT_SCALING_FACTOR,
+    cost_matrix: Any | None = None,
+) -> SolveResult:
+    """Solve one instance without collapsing absence of an incumbent into infeasibility."""
+    points = _instance_coords(coords)
+    factor = _positive_integer("scaling_factor", scaling_factor)
+    numeric_seed = _nonnegative_integer("seed", seed)
+    if numeric_seed > _MAX_SEED:
+        raise ValueError(f"seed must not exceed {_MAX_SEED}")
+    runtime, _, kind = _limits(max_runtime_s, None)
+    source_matrix(points, cost_matrix)
+    loads = source_loads(demands, len(points), capacity)
+    if np.any(loads[1:] > capacity):
+        return SolveResult(
+            problem="cvrp",
+            method="ortools",
+            status=SolveStatus.INFEASIBLE,
+            feasible=False,
+            solver_status="CAPACITY_NECESSARY_CONDITION",
+            metadata={"reason": "A customer demand exceeds vehicle capacity"},
+        )
+    result = _solve_instance(
+        points,
+        loads,
+        capacity,
+        instance_index=0,
+        seed=numeric_seed,
+        max_runtime_s=runtime,
+        solution_limit=None,
+        scaling_factor=factor,
+        limit_kind=kind,
+        cost_matrix=cost_matrix,
+        return_result=True,
+    )
+    assert isinstance(result, SolveResult)
+    return result
 
 
 def _solution_routes(
@@ -360,4 +462,5 @@ __all__ = [
     "CVRPSolveResult",
     "integer_distance_matrix",
     "solve_corpus_sequential",
+    "solve_instance_result",
 ]

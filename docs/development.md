@@ -58,8 +58,11 @@ On systems without Make, run the commands in the Makefile directly.
 
 `make wheel-smoke` additionally installs the built wheels into fresh temporary
 environments outside the checkout. It checks minimal `core+problems`, CLI, and
-CLI reporting profiles, plus a full profile installing all ten distributions.
-The reporting profile executes the complete CPU smoke recipe. CI runs these
+CLI reporting profiles, plus a full profile installing all ten distributions
+and the classical solver extra. All profiles exercise the solve API; command
+profiles also export heuristic and neural solutions, and the full profile checks
+the OR-Tools and PyVRP adapters. The reporting profile executes the complete CPU
+smoke recipe. CI runs these
 checks on Python 3.11 and 3.12. To check one profile:
 
 ```bash

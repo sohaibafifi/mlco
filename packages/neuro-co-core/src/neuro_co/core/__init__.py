@@ -27,6 +27,7 @@ from .distributed import (
 from .env import Env
 from .model import NEG_INF, Policy, PolicyModule, apply_mask
 from .precision import Precision
+from .result import SolveResult, SolveStatus, ValidationReport
 from .state import State, register_state
 from .trace import Step, Trace, layer_activations, rollout_trace
 from .train import Trainer, TrainHooks, TrainState
@@ -47,6 +48,8 @@ __all__ = [
     "Policy",
     "PolicyModule",
     "Precision",
+    "SolveResult",
+    "SolveStatus",
     "State",
     "Step",
     "Trace",
@@ -54,6 +57,7 @@ __all__ = [
     "TrainHooks",
     "TrainState",
     "Trainer",
+    "ValidationReport",
     "WeightEMA",
     "all_reduce_grads",
     "all_reduce_mean",

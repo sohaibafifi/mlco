@@ -15,6 +15,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from neuro_co.core.result import SolveResult, SolveStatus, ValidationReport
+
+from .instances import RoutingInstance, load_instance
+from .solve import solve
+from .validation import validate_routes
+
 log = logging.getLogger(__name__)
 
 
@@ -131,8 +137,15 @@ def get_bank(name: str) -> Any:
 
 __all__ = [
     "BASELINE_SOLVERS",
+    "RoutingInstance",
+    "SolveResult",
+    "SolveStatus",
+    "ValidationReport",
     "force_reload",
     "get_bank",
     "get_solver",
+    "load_instance",
     "load_plugins",
+    "solve",
+    "validate_routes",
 ]

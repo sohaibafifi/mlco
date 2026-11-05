@@ -8,10 +8,14 @@ this tractable; for larger N consider a dedicated routing model.
 
 from __future__ import annotations
 
-from typing import Any
+from itertools import pairwise
+from typing import Any, Literal, overload
 
 import numpy as np
 from ortools.sat.python import cp_model
+
+from neuro_co.core.result import SolveResult, ValidationReport
+from neuro_co.problems.solver_result import cp_result
 
 
 def _td_to_arrays(instance: Any) -> tuple[np.ndarray, np.ndarray, float]:
@@ -21,13 +25,36 @@ def _td_to_arrays(instance: Any) -> tuple[np.ndarray, np.ndarray, float]:
     return locs, prize, max_len
 
 
+@overload
 def solve_op(
     instance: Any,
     *,
     max_runtime: float = 5.0,
     scale: int = 10000,
     feasibility_only: bool = False,
-) -> tuple[list[int], float]:
+    return_result: Literal[False] = False,
+) -> tuple[list[int], float]: ...
+
+
+@overload
+def solve_op(
+    instance: Any,
+    *,
+    max_runtime: float = 5.0,
+    scale: int = 10000,
+    feasibility_only: bool = False,
+    return_result: Literal[True],
+) -> SolveResult: ...
+
+
+def solve_op(
+    instance: Any,
+    *,
+    max_runtime: float = 5.0,
+    scale: int = 10000,
+    feasibility_only: bool = False,
+    return_result: bool = False,
+) -> tuple[list[int], float] | SolveResult:
     """Solve a single OP instance with CP-SAT.
 
     Parameters
@@ -53,6 +80,19 @@ def solve_op(
     """
     locs, prize, max_len = _td_to_arrays(instance)
     n = locs.shape[0]
+    if return_result and (
+        locs.ndim != 2
+        or locs.shape[1] != 2
+        or n < 1
+        or prize.shape != (n,)
+        or not np.isfinite(locs).all()
+        or not np.isfinite(prize).all()
+        or np.any(prize < 0)
+        or prize[0] != 0
+        or not np.isfinite(max_len)
+        or max_len < 0
+    ):
+        raise ValueError("OP requires finite coordinates/prizes and a nonnegative travel budget")
     diff = locs[:, None, :] - locs[None, :, :]
     dist = np.linalg.norm(diff, axis=-1)
     dist_int = np.round(dist * scale).astype(np.int64)
@@ -66,7 +106,8 @@ def solve_op(
     visited = [model.NewBoolVar(f"v_{i}") for i in range(n)]
 
     # Depot always visited (start + end).
-    model.Add(visited[0] == 1)
+    if not return_result or feasibility_only:
+        model.Add(visited[0] == 1)
     if feasibility_only and n > 1:
         # Exclude the vacuous depot-only circuit. The feasibility oracle
         # certifies that at least one prize-bearing customer can be visited.
@@ -107,8 +148,23 @@ def solve_op(
         solver.parameters.stop_after_first_solution = True
     status = solver.Solve(model)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        if return_result:
+            return cp_result(
+                "op",
+                solver,
+                status,
+                scale=scale,
+                sense="max",
+                metadata={
+                    "model_matches_source": bool(
+                        np.array_equal(dist_int / scale, dist)
+                        and np.array_equal(prize_int / scale, prize)
+                        and budget_int / scale == max_len
+                    )
+                },
+            )
         return [], float("nan")
-    if feasibility_only:
+    if feasibility_only and not return_result:
         return [0], 0.0
 
     # Reconstruct tour: follow x[0, *].
@@ -127,4 +183,42 @@ def solve_op(
         cur = nxt
 
     prize_collected = solver.ObjectiveValue() / scale
+    if return_result:
+        violations = []
+        if (
+            not route
+            or route[0] != 0
+            or route[-1] != 0
+            or len(set(route[1:-1])) != len(route[1:-1])
+        ):
+            violations.append("Route must start and end at the depot without repeated customers")
+        length = sum(float(dist[a, b]) for a, b in pairwise(route))
+        if length > max_len + 1e-7:
+            violations.append("Route exceeds the source travel budget")
+        prize_value = float(sum(prize[i] for i in route if i != 0))
+        validation = ValidationReport(
+            feasible=not violations,
+            objective=prize_value if not violations else None,
+            violations=tuple(violations),
+            metadata={"independent": True, "tour_length": length},
+        )
+        return cp_result(
+            "op",
+            solver,
+            status,
+            solution={"route": route},
+            objective=prize_value,
+            scale=scale,
+            sense="max",
+            validation=validation,
+            feasibility_only=feasibility_only,
+            metadata={
+                "scale": scale,
+                "model_matches_source": bool(
+                    np.array_equal(dist_int / scale, dist)
+                    and np.array_equal(prize_int / scale, prize)
+                    and budget_int / scale == max_len
+                ),
+            },
+        )
     return route, -float(prize_collected)

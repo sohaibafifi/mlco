@@ -91,6 +91,10 @@ def main(argv: list[str] | None = None) -> None:
 
     # Subcommands with their own parsers delegate lazily to keep core deps light.
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "solve":
+        from neuro_co.cli.solve import main_cli
+
+        raise SystemExit(main_cli(argv[1:]))
     if argv and argv[0] == "probe":
         from neuro_co.probe.probes_cli import main as probe_main
 
@@ -112,7 +116,7 @@ def main(argv: list[str] | None = None) -> None:
 
     parser = argparse.ArgumentParser(
         prog="neuroco",
-        epilog="Other commands: probe, results, figures, stats, experiment, budget. "
+        epilog="Other commands: solve, probe, results, figures, stats, experiment, budget. "
         "Use COMMAND --help for their options.",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)

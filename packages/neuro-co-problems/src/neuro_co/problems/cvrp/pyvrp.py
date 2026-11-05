@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 import operator
+import time
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -26,6 +27,9 @@ import numpy as np
 from pyvrp import Client, Depot, ProblemData, VehicleType
 from pyvrp import solve as _solve
 from pyvrp.stop import MaxIterations, MaxRuntime
+
+from neuro_co.core.result import SolveResult, SolveStatus
+from neuro_co.problems.solver_result import source_loads, source_matrix, validate_cvrp
 
 DEFAULT_SCALING_FACTOR = 1_000_000
 _MAX_SEED = 2**31 - 1
@@ -72,6 +76,8 @@ def build_problem_data(
     demands: Any,
     capacity: float,
     scaling_factor: int = DEFAULT_SCALING_FACTOR,
+    *,
+    cost_matrix: Any | None = None,
 ) -> ProblemData:
     """Build integer PyVRP data for one depot-first CVRP instance."""
 
@@ -101,7 +107,10 @@ def build_problem_data(
         num_available=points.shape[0] - 1,
         capacity=[vehicle_capacity],
     )
-    matrix = integer_distance_matrix(points, factor)
+    original_matrix = source_matrix(points, cost_matrix)
+    scaled_matrix = original_matrix * factor
+    _check_int64_range("scaled distances", scaled_matrix)
+    matrix = np.ascontiguousarray(np.rint(scaled_matrix).astype(np.int64))
     return ProblemData(
         clients,
         [depot],
@@ -218,6 +227,76 @@ def solve_corpus_sequential(
     return outputs
 
 
+def solve_instance_result(
+    coords: Any,
+    demands: Any,
+    capacity: float,
+    *,
+    seed: int = 0,
+    max_runtime_s: float = 5.0,
+    scaling_factor: int = DEFAULT_SCALING_FACTOR,
+    cost_matrix: Any | None = None,
+) -> SolveResult:
+    """Return a common result for one CVRP, retaining the caller's cost matrix."""
+    started = time.perf_counter()
+    points = _instance_coords(coords)
+    factor = _positive_integer("scaling_factor", scaling_factor)
+    numeric_seed = _nonnegative_integer("seed", seed)
+    if numeric_seed > _MAX_SEED:
+        raise ValueError(f"seed must not exceed {_MAX_SEED}")
+    _, runtime, _ = _limits(None, max_runtime_s)
+    original_matrix = source_matrix(points, cost_matrix)
+    loads = source_loads(demands, len(points), capacity)
+    if np.any(loads[1:] > capacity):
+        return SolveResult(
+            problem="cvrp",
+            method="pyvrp",
+            status=SolveStatus.INFEASIBLE,
+            feasible=False,
+            solver_status="CAPACITY_NECESSARY_CONDITION",
+            runtime_s=time.perf_counter() - started,
+            metadata={"reason": "A customer demand exceeds vehicle capacity"},
+        )
+    data = build_problem_data(points, loads, capacity, factor, cost_matrix=original_matrix)
+    assert runtime is not None
+    result = _solve(
+        data, MaxRuntime(runtime), seed=numeric_seed, collect_stats=False, display=False
+    )
+    if not result.is_feasible() or not result.best.is_complete():
+        return SolveResult(
+            problem="cvrp",
+            method="pyvrp",
+            status=SolveStatus.UNKNOWN,
+            feasible=None,
+            runtime_s=time.perf_counter() - started,
+            solver_status="NO_FEASIBLE_INCUMBENT",
+            metadata={"seed": seed, "scaling_factor": factor},
+        )
+    routes = solution_routes(result.best)
+    validation = validate_cvrp(routes, original_matrix, loads, capacity)
+    return SolveResult(
+        problem="cvrp",
+        method="pyvrp",
+        status=SolveStatus.FEASIBLE if validation.feasible else SolveStatus.INVALID,
+        solution={"routes": [list(route) for route in routes]},
+        objective=validation.objective,
+        feasible=validation.feasible,
+        validation=validation,
+        runtime_s=time.perf_counter() - started,
+        solver_status="FEASIBLE_INCUMBENT",
+        metadata={
+            "seed": numeric_seed,
+            "scaling_factor": factor,
+            "integer_objective": int(result.cost()),
+            "model_matches_source": bool(
+                np.array_equal(np.rint(original_matrix * factor) / factor, original_matrix)
+                and np.array_equal(np.rint(loads * factor) / factor, loads)
+                and round(capacity * factor) / factor == capacity
+            ),
+        },
+    )
+
+
 def _limits(
     max_iterations: int | None,
     max_runtime_s: float | None,
@@ -318,4 +397,5 @@ __all__ = [
     "integer_distance_matrix",
     "solution_routes",
     "solve_corpus_sequential",
+    "solve_instance_result",
 ]

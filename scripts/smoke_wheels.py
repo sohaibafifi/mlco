@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -26,7 +27,9 @@ import importlib.util
 import pathlib
 import sys
 import torch
+import numpy as np
 from neuro_co.core.factory import make_algo, make_env, make_model
+from neuro_co.problems import RoutingInstance, SolveResult, solve
 
 for package in sys.argv[1:]:
     module = importlib.import_module('neuro_co.' + package)
@@ -45,6 +48,17 @@ model = make_model(env, hidden_dim=16, num_layers=1, num_heads=2)
 algo = make_algo('reinforce', model, env, batch_size=2, eval_batch_size=2)
 algo.train_step(torch.Generator().manual_seed(7))
 assert algo.eval_step(torch.Generator().manual_seed(8))
+instance = RoutingInstance(problem='tsp', coords=np.array([[0, 0], [1, 0], [1, 1], [0, 1]]))
+result = solve(instance, method='nearest_neighbour')
+assert isinstance(result, SolveResult)
+assert result.feasible and result.objective == 4.0
+assert result.to_dict()['schema'] == 'neuro-co-solve/v1'
+if 'cax' in sys.argv[1:]:
+    cvrp = RoutingInstance(problem='cvrp', coords=instance.coords,
+                          demand=np.array([0, 1, 1, 1]), capacity=2)
+    for method in ('ortools', 'pyvrp'):
+        result = solve(cvrp, method=method, max_runtime=0.2)
+        assert result.feasible and result.validation.feasible, (method, result.to_dict())
 """
 
 
@@ -60,7 +74,13 @@ def check_profile(dist: Path, profile: str, python: str, *, offline: bool = Fals
         if len(wheels) != 1:
             raise ValueError(f"Expected exactly one {package} wheel in {dist}, found {len(wheels)}")
         wheel = wheels[0]
-        extras = "[report]" if package == "cli" and profile == "report" else ""
+        extras = (
+            "[report]"
+            if package == "cli" and profile == "report"
+            else "[cp]"
+            if package == "problems" and profile == "full"
+            else ""
+        )
         requirements.append(f"neuro-co-{package}{extras} @ {wheel.as_uri()}")
 
     env = os.environ.copy()
@@ -136,6 +156,30 @@ def check_profile(dist: Path, profile: str, python: str, *, offline: bool = Fals
                     env=env,
                     check=True,
                 )
+            instance = work / "instance.json"
+            nodes = 6 if profile == "report" else 5
+            instance.write_text(
+                json.dumps(
+                    {
+                        "problem": "tsp",
+                        "coords": [[0, 0], [1, 0], [1, 1], [0, 1], [0.5, 0.5], [0.2, 0.8]][:nodes],
+                    }
+                )
+            )
+            checkpoint = (
+                "experiments/smoke/runs/tsp/train_seed0/best.pt"
+                if profile == "report"
+                else "run/best.pt"
+            )
+            for options in (["--method", "nearest_neighbour"], ["--ckpt", checkpoint]):
+                subprocess.run(
+                    [str(neuroco), "solve", str(instance), *options, "--out", "solution.json"],
+                    cwd=work,
+                    env=env,
+                    check=True,
+                )
+                result = json.loads((work / "solution.json").read_text())
+                assert result["feasible"] is True and result["status"] == "feasible"
     print(f"[wheels] {profile}: passed", flush=True)
 
 

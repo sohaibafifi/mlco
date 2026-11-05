@@ -17,3 +17,8 @@ Use matching problem, size, and algorithm settings when evaluating.
 `--help` pages. Energy reports use the separate `neuroco-aet-report` command.
 
 See [training](../../docs/training.md) for backbones and JAX.
+
+`neuroco solve instance.vrp --ckpt outputs/cvrp/best.pt --out solution.json`
+solves supplied data and exports a common result with independent routing checks.
+Without a checkpoint, the default is the nearest-neighbour reference heuristic.
+See [solving instances](../../docs/solving.md) for formats, status, and solver options.
